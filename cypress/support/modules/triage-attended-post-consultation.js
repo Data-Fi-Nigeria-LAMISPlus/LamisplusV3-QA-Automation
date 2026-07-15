@@ -1,3 +1,6 @@
+const EMAIL = Cypress.env('EMAIL')
+const PASSWORD = Cypress.env('PASSWORD')
+
 describe('Triage Attended - Post Patient to Consultation', () => {
   it('should open attended tab action menu and post a patient to consultation', () => {
     const today = new Date().toISOString().split('T')[0]
@@ -26,9 +29,9 @@ describe('Triage Attended - Post Patient to Consultation', () => {
     }
 
     cy.visit('/login')
-    cy.get('input[type="email"]').type('ibe@gmail.com', { delay: 150 })
+    cy.get('input[type="email"]').type(EMAIL, { delay: 150 })
     cy.wait(shortPause)
-    cy.get('input[type="password"]').type('Password123$', { delay: 150 })
+    cy.get('input[type="password"]').type(PASSWORD, { delay: 150 })
     cy.wait(shortPause)
     cy.get('button[type="submit"]').click()
     cy.url().should('not.include', '/login')

@@ -1,3 +1,6 @@
+const EMAIL = Cypress.env('EMAIL')
+const PASSWORD = Cypress.env('PASSWORD')
+
 describe('Post Patient to Triage', () => {
   it('should open Action menu for a patient, navigate to Dashboard, click Post Patient and submit check-in form', () => {
     // Generate today's date in YYYY-MM-DD format (visit date must be today or future)
@@ -5,8 +8,8 @@ describe('Post Patient to Triage', () => {
 
     // ─── Step 1: Login ────────────────────────────────────────────────────────
     cy.visit('/login')
-    cy.get('input[type="email"]').type('ibe@gmail.com')
-    cy.get('input[type="password"]').type('Password123$')
+    cy.get('input[type="email"]').type(EMAIL)
+    cy.get('input[type="password"]').type(PASSWORD)
     cy.get('button[type="submit"]').click()
     cy.url().should('not.include', '/login')
     cy.wait(3000)

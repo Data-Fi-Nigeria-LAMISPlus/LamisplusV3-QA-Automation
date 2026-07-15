@@ -4,29 +4,32 @@ export const locator = {
   SUBMIT_BUTTON : 'button[type="submit"]'
 }
 
+const EMAIL = Cypress.env('EMAIL')
+const PASSWORD = Cypress.env('PASSWORD')
+
 export const login = () => {
   cy.visit('/login')
-  cy.get(locator.EMAIL_INPUT).type('facility_admin@gmail.com')
-  cy.get(locator.PASSWORD_INPUT).type('p@55W0rd!')
+  cy.get(locator.EMAIL_INPUT).type(EMAIL)
+  cy.get(locator.PASSWORD_INPUT).type(PASSWORD)
   cy.get(locator.SUBMIT_BUTTON).click()
   cy.url().should('not.include', '/login')
 }
 
 export const invalidEmail = () => {
   cy.get(locator.EMAIL_INPUT).type('invalid-email')
-  cy.get(locator.PASSWORD_INPUT).type('Password123$')
+  cy.get(locator.PASSWORD_INPUT).type(PASSWORD)
   cy.get(locator.SUBMIT_BUTTON).click()
   cy.contains('Invalid email').should('be.visible')
 }
 
 export const emptyEmailError = () => {
-  cy.get(locator.PASSWORD_INPUT).type('Password123$')
+  cy.get(locator.PASSWORD_INPUT).type(PASSWORD)
   cy.get(locator.SUBMIT_BUTTON).click()
   cy.contains('Email is required').should('be.visible')
 }
 
 export const emptyPasswordError = () => {
-  cy.get(locator.EMAIL_INPUT).type('ibe@gmail.com')
+  cy.get(locator.EMAIL_INPUT).type(EMAIL)
   cy.get(locator.SUBMIT_BUTTON).click()
   cy.contains('Password is required').should('be.visible')
 }
@@ -45,7 +48,7 @@ export const invalidCredentialsError = () => {
 }
 
 export const wrongPasswordError = () => {
-  cy.get(locator.EMAIL_INPUT).type('ibe@gmail.com')
+  cy.get(locator.EMAIL_INPUT).type(EMAIL)
   cy.get(locator.PASSWORD_INPUT).type('wrongpassword')
   cy.get(locator.SUBMIT_BUTTON).click()
   cy.contains('Invalid password').should('be.visible')
@@ -53,35 +56,35 @@ export const wrongPasswordError = () => {
 
 export const wrongEmailError = () => {
   cy.get(locator.EMAIL_INPUT).type('wrong@email.com')
-  cy.get(locator.PASSWORD_INPUT).type('Password123$')
+  cy.get(locator.PASSWORD_INPUT).type(PASSWORD)
   cy.get(locator.SUBMIT_BUTTON).click()
   cy.contains('Invalid email').should('be.visible')
 }
 
 export const caseSensitiveEmail = () => {
-  cy.get(locator.EMAIL_INPUT).type('IBE@GMAIL.COM')
-  cy.get(locator.PASSWORD_INPUT).type('Password123$')
+  cy.get(locator.EMAIL_INPUT).type(EMAIL.toUpperCase())
+  cy.get(locator.PASSWORD_INPUT).type(PASSWORD)
   cy.get(locator.SUBMIT_BUTTON).click()
   cy.url().should('not.include', '/login')
 }
 
 export const leadingTrailingSpacesEmail = () => {
-  cy.get(locator.EMAIL_INPUT).type('  ibe@gmail.com  ')
-  cy.get(locator.PASSWORD_INPUT).type('  Password123$  ')
+  cy.get(locator.EMAIL_INPUT).type(`  ${EMAIL}  `)
+  cy.get(locator.PASSWORD_INPUT).type(`  ${PASSWORD}  `)
   cy.get(locator.SUBMIT_BUTTON).click()
   cy.url().should('not.include', '/login')
 }
 
 export const leadingTrailingSpacesPassword = () => {
-  cy.get(locator.EMAIL_INPUT).type('ibe@gmail.com')
-  cy.get(locator.PASSWORD_INPUT).type('  Password123$  ')
+  cy.get(locator.EMAIL_INPUT).type(EMAIL)
+  cy.get(locator.PASSWORD_INPUT).type(`  ${PASSWORD}  `)
   cy.get(locator.SUBMIT_BUTTON).click()
   cy.contains('Invalid credentials').should('be.visible')
 }
 
 export const multipleRapidLoginAttempts = () => {
   for (let i = 0; i < 5; i++) {
-    cy.get(locator.EMAIL_INPUT).clear().type('ibe@gmail.com')
+    cy.get(locator.EMAIL_INPUT).clear().type(EMAIL)
     cy.get(locator.PASSWORD_INPUT).clear().type('wrongpassword')
     cy.get(locator.SUBMIT_BUTTON).click()
   }
@@ -94,8 +97,8 @@ export const forgotPasswordLink = () => {
 }
 
 export const rememberUserSession = () => {
-  cy.get(locator.EMAIL_INPUT).type('ibe@gmail.com')
-  cy.get(locator.PASSWORD_INPUT).type('Password123$')
+  cy.get(locator.EMAIL_INPUT).type(EMAIL)
+  cy.get(locator.PASSWORD_INPUT).type(PASSWORD)
   cy.get(locator.SUBMIT_BUTTON).click()
   cy.url().should('not.include', '/login')
   cy.reload()
@@ -105,24 +108,24 @@ export const rememberUserSession = () => {
 export const redirectToIntendedPage = () => {
   cy.visit('/dashboard')
   cy.url().should('include', '/login')
-  cy.get(locator.EMAIL_INPUT).type('ibe@gmail.com')
-  cy.get(locator.PASSWORD_INPUT).type('Password123$')
+  cy.get(locator.EMAIL_INPUT).type(EMAIL)
+  cy.get(locator.PASSWORD_INPUT).type(PASSWORD)
   cy.get(locator.SUBMIT_BUTTON).click()
   cy.url().should('include', '/dashboard')
 }
 
 export const networkErrorHandling = () => {
   cy.intercept('POST', '**/login', { forceNetworkError: true }).as('loginRequest')
-  cy.get(locator.EMAIL_INPUT).type('ibe@gmail.com')
-  cy.get(locator.PASSWORD_INPUT).type('Password123$')
+  cy.get(locator.EMAIL_INPUT).type(EMAIL)
+  cy.get(locator.PASSWORD_INPUT).type(PASSWORD)
   cy.get(locator.SUBMIT_BUTTON).click()
   cy.contains('Network error').should('be.visible')
 }
 
 export const serverErrorHandling = () => {
   cy.intercept('POST', '**/login', { statusCode: 500 }).as('loginRequest')
-  cy.get(locator.EMAIL_INPUT).type('ibe@gmail.com')
-  cy.get(locator.PASSWORD_INPUT).type('Password123$')
+  cy.get(locator.EMAIL_INPUT).type(EMAIL)
+  cy.get(locator.PASSWORD_INPUT).type(PASSWORD)
   cy.get(locator.SUBMIT_BUTTON).click()
   cy.contains('Server error').should('be.visible')
 }
@@ -135,9 +138,9 @@ export const clearErrorMessagesOnTyping = () => {
 }
 
 export const maintainFormStateOnRefresh = () => {
-  cy.get(locator.EMAIL_INPUT).type('ibe@gmail.com')
+  cy.get(locator.EMAIL_INPUT).type(EMAIL)
   cy.reload()
-  cy.get(locator.EMAIL_INPUT).should('have.value', 'ibe@gmail.com')
+  cy.get(locator.EMAIL_INPUT).should('have.value', EMAIL)
 }
 
 export const longEmailInput = () => {
@@ -154,7 +157,7 @@ export const longPasswordInput = () => {
 
 export const specialCharactersPassword = () => {
   const specialPassword = 'Admin@123!#$%^&*()'
-  cy.get(locator.EMAIL_INPUT).type('ibe@gmail.com')
+  cy.get(locator.EMAIL_INPUT).type(EMAIL)
   cy.get(locator.PASSWORD_INPUT).type(specialPassword)
   cy.get(locator.SUBMIT_BUTTON).click()
   cy.url().should('not.include', '/login')
@@ -162,7 +165,7 @@ export const specialCharactersPassword = () => {
 
 export const unicodeCharactersEmail = () => {
   cy.get(locator.EMAIL_INPUT).type('tëst@example.com')
-  cy.get(locator.PASSWORD_INPUT).type('Password123$')
+  cy.get(locator.PASSWORD_INPUT).type(PASSWORD)
   cy.get(locator.SUBMIT_BUTTON).click()
   cy.url().then(url => {
     if (url.includes('/login')) {
@@ -174,8 +177,8 @@ export const unicodeCharactersEmail = () => {
 }
 
 export const backForwardNavigation = () => {
-  cy.get(locator.EMAIL_INPUT).type('ibe@gmail.com')
-  cy.get(locator.PASSWORD_INPUT).type('Password123$')
+  cy.get(locator.EMAIL_INPUT).type(EMAIL)
+  cy.get(locator.PASSWORD_INPUT).type(PASSWORD)
   cy.get(locator.SUBMIT_BUTTON).click()
   cy.url().should('not.include', '/login')
   cy.go('back')
@@ -203,15 +206,15 @@ export const slowNetworkConditions = () => {
       res.delay = 400
     })
   }).as('slowLogin')
-  cy.get(locator.EMAIL_INPUT).type('ibe@gmail.com')
-  cy.get(locator.PASSWORD_INPUT).type('Password123$')
+  cy.get(locator.EMAIL_INPUT).type(EMAIL)
+  cy.get(locator.PASSWORD_INPUT).type(PASSWORD)
   cy.get(locator.SUBMIT_BUTTON).click()
   cy.wait('@slowLogin')
   cy.url().should('not.include', '/login')
 }
 
 export const validatePasswordStrength = () => {
-  cy.get(locator.EMAIL_INPUT).type('ibe@gmail.com')
+  cy.get(locator.EMAIL_INPUT).type(EMAIL)
   cy.get(locator.PASSWORD_INPUT).type('123')
   cy.get(locator.SUBMIT_BUTTON).click()
   cy.contains('Password too weak').should('be.visible')
@@ -223,8 +226,8 @@ export const concurrentLoginAttempts = () => {
       res.delay = 250
     })
   }).as('loginRequest')
-  cy.get(locator.EMAIL_INPUT).type('ibe@gmail.com')
-  cy.get(locator.PASSWORD_INPUT).type('Password123$')
+  cy.get(locator.EMAIL_INPUT).type(EMAIL)
+  cy.get(locator.PASSWORD_INPUT).type(PASSWORD)
   cy.get(locator.SUBMIT_BUTTON).click()
   cy.get(locator.SUBMIT_BUTTON).click()
   cy.get(locator.SUBMIT_BUTTON).click()
@@ -239,8 +242,8 @@ export const browserAutofill = () => {
 }
 
 export const formSubmissionViaEnterKey = () => {
-  cy.get(locator.EMAIL_INPUT).type('ibe@gmail.com')
-  cy.get(locator.PASSWORD_INPUT).type('Password123$')
+  cy.get(locator.EMAIL_INPUT).type(EMAIL)
+  cy.get(locator.PASSWORD_INPUT).type(PASSWORD)
   cy.get(locator.PASSWORD_INPUT).type('{enter}')
   cy.url().should('not.include', '/login')
 }
@@ -251,8 +254,8 @@ export const preventFormSubmissionDuringLoading = () => {
       res.delay = 500
     })
   }).as('slowLogin')
-  cy.get(locator.EMAIL_INPUT).type('ibe@gmail.com')
-  cy.get(locator.PASSWORD_INPUT).type('Password123$')
+  cy.get(locator.EMAIL_INPUT).type(EMAIL)
+  cy.get(locator.PASSWORD_INPUT).type(PASSWORD)
   cy.get(locator.SUBMIT_BUTTON).click()
   cy.get(locator.SUBMIT_BUTTON).should('be.disabled')
   cy.wait('@slowLogin')
@@ -292,8 +295,8 @@ export const captchaHandling = () => {
 }
 
 export const twoFactorAuthentication = () => {
-  cy.get(locator.EMAIL_INPUT).type('ibe@gmail.com')
-  cy.get(locator.PASSWORD_INPUT).type('Password123$')
+  cy.get(locator.EMAIL_INPUT).type(EMAIL)
+  cy.get(locator.PASSWORD_INPUT).type(PASSWORD)
   cy.get(locator.SUBMIT_BUTTON).click()
   cy.get('[data-cy="2fa-code"]').then($input => {
     if ($input.length > 0) {
@@ -312,7 +315,7 @@ export const accountVerificationRequirements = () => {
 }
 
 export const passwordExpiration = () => {
-  cy.get(locator.EMAIL_INPUT).type('ibe@gmail.com')
+  cy.get(locator.EMAIL_INPUT).type(EMAIL)
   cy.get(locator.PASSWORD_INPUT).type('expiredpassword')
   cy.get(locator.SUBMIT_BUTTON).click()
   cy.url().should('include', '/reset-password')
