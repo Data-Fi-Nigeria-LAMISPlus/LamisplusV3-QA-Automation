@@ -3,6 +3,8 @@
   "scripts": {
     "cy:ui": "cypress run --config-file ui.config.js",
     "cy:ui:open": "cypress open --config-file ui.config.js",
+    "cy:ui:opd-consultation": "cypress run --config-file ui.config.js --spec \"cypress/e2e/ui/opd-consultation/**/*.cy.js\"",
+    "cy:ui:nightly": "cypress run --config-file ui.config.js --spec \"cypress/e2e/ui/smoke/**/*.cy.js\"",
     "cy:api": "cypress run --config-file api.config.js",
     "cy:api:open": "cypress open --config-file api.config.js",
 

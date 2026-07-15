@@ -1,3 +1,6 @@
+const EMAIL = Cypress.env('EMAIL')
+const PASSWORD = Cypress.env('PASSWORD')
+
 describe('Triage Capture Vitals', () => {
   it('should open triage actions, capture vitals, fill the form, and save', () => {
     const today = new Date().toISOString().split('T')[0]
@@ -10,9 +13,9 @@ describe('Triage Capture Vitals', () => {
     }
 
     cy.visit('/login')
-    cy.get('input[type="email"]').type('ibe@gmail.com', { delay: 120 })
+    cy.get('input[type="email"]').type(EMAIL, { delay: 120 })
     cy.wait(500)
-    cy.get('input[type="password"]').type('Password123$', { delay: 120 })
+    cy.get('input[type="password"]').type(PASSWORD, { delay: 120 })
     cy.wait(500)
     cy.get('button[type="submit"]').click()
     cy.url().should('not.include', '/login')

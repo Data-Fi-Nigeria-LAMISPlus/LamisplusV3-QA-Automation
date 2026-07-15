@@ -1,19 +1,20 @@
-name: UI Tests
+name: OPD Consultation
 
-# Everything under cypress/e2e/ui/smoke — i.e. all UI modules except the OPD
-# consultation spec, which has its own workflow (opd-consultation.yml).
+# Runs on:
+#    so the app repo must explicitly notify this one - see project setup notes)
+#  - manual workflow_dispatch
 on:
   push:
     branches: [master, main]
+  repository_dispatch:
+    types: [app-master-push]
   workflow_dispatch:
-  schedule:
-    - cron: '0 3 * * *'
 
 env:
   CI: true
 
 jobs:
-  ui-tests:
+  opd-consultation-fill-form:
     runs-on: ubuntu-latest
 
     env:
@@ -30,14 +31,16 @@ jobs:
 
       - run: npm ci
 
-      - name: Run UI Tests
-        run: npm run cy:ui:nightly
+      - name: Run OPD Consultation Fill Form test
+        run: npm run cy:ui:opd-consultation
 
       - name: Generate UI Report
+        if: always()
         run: npm run report:ui
 
       - name: Upload UI Report
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ui-report
+          name: opd-consultation-report
           path: cypress/reports/ui/final

@@ -1,8 +1,11 @@
+const EMAIL = Cypress.env('EMAIL')
+const PASSWORD = Cypress.env('PASSWORD')
+
 describe('Patient Registration - Additional Scenarios', () => {
   const loginAndOpenRegistration = () => {
     cy.visit('/login')
-    cy.get('input[type="email"]').type('ibe@gmail.com')
-    cy.get('input[type="password"]').type('Password123$')
+    cy.get('input[type="email"]').type(EMAIL)
+    cy.get('input[type="password"]').type(PASSWORD)
     cy.get('button[type="submit"]').click()
     cy.url().should('not.include', '/login')
 

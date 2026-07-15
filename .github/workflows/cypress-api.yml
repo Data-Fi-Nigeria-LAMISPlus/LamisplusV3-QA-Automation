@@ -1,11 +1,12 @@
-name: API Tests
+name: API Tests (Nightly)
 
 on:
-  workflow_dispatch:
   push:
-    branches: [master]
-  pull_request: 
-    branches: [master]
+    branches: [master, main]
+  workflow_dispatch:
+  schedule:
+    # 03:00 UTC = 06:00 EAT (Africa/Nairobi, UTC+3, no DST)
+    - cron: '0 3 * * *'
 
 env:
   CI: true
