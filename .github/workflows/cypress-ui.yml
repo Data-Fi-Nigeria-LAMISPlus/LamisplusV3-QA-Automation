@@ -6,11 +6,24 @@ on:
   push:
     branches: [master, main]
   workflow_dispatch:
+    inputs:
+      target_env:
+        description: "Target environment: dev, qa, or prod"
+        required: true
+        default: qa
+        type: choice
+        options:
+          - dev
+          - qa
+          - prod
   schedule:
     - cron: '0 3 * * *'
 
 env:
   CI: true
+  DEV_BASE_URL: ${{ secrets.DEV_BASE_URL }}
+  QA_BASE_URL: ${{ secrets.QA_BASE_URL }}
+  PROD_BASE_URL: ${{ secrets.PROD_BASE_URL }}
 
 jobs:
   ui-tests:
@@ -19,6 +32,7 @@ jobs:
     env:
       EMAIL: ${{ secrets.EMAIL }}
       PASSWORD: ${{ secrets.PASSWORD }}
+      TARGET_ENV: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.target_env || 'qa' }}
 
     steps:
       - uses: actions/checkout@v4
@@ -31,12 +45,19 @@ jobs:
       - run: npm ci
 
       - name: Run UI Tests
-        run: npm run cy:ui:nightly
+        id: run_ui_tests
+        run: npm run cy:ui:${{ env.TARGET_ENV }}
 
       - name: Generate UI Report
+        if: always()
         run: npm run report:ui
 
+      - name: UI Test Summary
+        if: always()
+        run: node scripts/ci-test-summary.js cypress/reports/ui "UI" "${{ steps.run_ui_tests.outcome }}"
+
       - name: Upload UI Report
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: ui-report

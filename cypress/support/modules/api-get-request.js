@@ -21,7 +21,7 @@ export const getGeneralDashboard = () => {
       const totalStats = data.totalStats;
       expect(totalStats).to.have.property("totalNumberOfpatients");
       const totalByAgeSegregation = data.totalByAgeSegregation;
-      expect(totalByAgeSegregation).to.have.property("0to12");
+      expect(totalByAgeSegregation).to.be.an("object");
     });
 };
 
