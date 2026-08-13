@@ -8,7 +8,7 @@
   "clean:api": "node -e \"require('fs').rmSync('cypress/reports/api',{recursive:true,force:true})\"",
 
   "precy:ui": "npm run clean:ui",
-  "cy:ui": "cypress run --config-file ui.config.js --spec \"cypress/e2e/ui/smoke/**/*.cy.js\"",
+  "cy:ui": "cypress run --config-file ui.config.js --spec \"cypress/e2e/ui/smoke/**/*.cy.js,cypress/e2e/ui/clinical/**/*.cy.js\"",
   "cy:ui:dev": "npm run cy:ui -- --env env=dev",
   "cy:ui:qa": "npm run cy:ui -- --env env=qa",
   "cy:ui:prod": "npm run cy:ui -- --env env=prod",
@@ -32,8 +32,8 @@
   "cy:api:qa": "npm run cy:api -- --env env=qa",
   "cy:api:prod": "npm run cy:api -- --env env=prod",
 
-  "report:ui": "mochawesome-merge \"cypress/reports/ui/*.json\" -o cypress/reports/ui/final/merged.json && marge cypress/reports/ui/final/merged.json -f ui-report -o cypress/reports/ui/final",
-  "report:api": "mochawesome-merge \"cypress/reports/api/*.json\" -o cypress/reports/api/final/merged.json && marge cypress/reports/api/final/merged.json -f api-report -o cypress/reports/api/final"
+  "report:ui": "node scripts/merge-reports.js cypress/reports/ui ui-report",
+  "report:api": "node scripts/merge-reports.js cypress/reports/api api-report"
  },
  "dependencies": {
   "cypress": "^15.14.0",

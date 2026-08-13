@@ -92,6 +92,44 @@ export const pickDateFromCalendar = (index) => {
   cy.get('[role="dialog"]').should('not.exist')
 }
 
+// Clinical pages come from the EHR plugin, which the host loads over Module
+// Federation and gives a fixed budget before rendering its catch-all 404. On a
+// cold load - which is every test, since state is cleared between them - a slow
+// remote means the route is not registered yet and the SPA renders "Page not
+// found" permanently: waiting longer never recovers it, only a reload does.
+//
+// So settle on either the ready element or the 404, and reload when it is the
+// 404. Without this the same navigation passes or fails run to run.
+export const visitPluginRoute = (route, readySelector, attempts = 3) => {
+  const tryOnce = (attempt) => {
+    cy.visit(route)
+
+    cy.get('body', { timeout: 30000 }).should(($body) => {
+      const ready = $body.find(readySelector).length > 0
+      const notFound = /Page not found/i.test($body.text() || '')
+      expect(ready || notFound, `${route} finished loading`).to.equal(true)
+    })
+
+    cy.get('body').then(($body) => {
+      if ($body.find(readySelector).length) return
+
+      if (attempt >= attempts) {
+        throw new Error(
+          `${route} rendered the app's 404 on ${attempts} attempts - the EHR plugin ` +
+            `routes never registered (expected "${readySelector}")`
+        )
+      }
+
+      cy.log(`${route} 404'd - plugin routes not registered, retry ${attempt + 1}/${attempts}`)
+      cy.wait(3000)
+      tryOnce(attempt + 1)
+    })
+  }
+
+  tryOnce(1)
+  cy.get(readySelector, { timeout: 30000 }).should('exist')
+}
+
 export const selectFirstRealOption = (selector) => {
   cy.get(selector, { timeout: 15000 }).then(($sel) => {
     const options = [...$sel[0].options].map((o) => o.value).filter(Boolean)
@@ -99,15 +137,17 @@ export const selectFirstRealOption = (selector) => {
   })
 }
 
-export const patientRegistration = () => {
+// Returns the hospital number it registered, so callers that need to find the
+// patient again downstream (OPD flow: post -> triage -> consultation) can track
+// it without re-deriving the suffix.
+export const patientRegistration = ({ hospitalNumber: hospitalNumberOverride } = {}) => {
     // '/ehr/registration/register' 404s on the deployed app; the live route is
     // '/patients/register'.
-    cy.visit('/patients/register')
-    cy.get(locator.FIRST_NAME_INPUT, { timeout: 30000 }).should('exist')
+    visitPluginRoute('/patients/register', locator.FIRST_NAME_INPUT)
 
     // Unique per run so repeat runs cannot collide on hospital number / NIN.
     const suffix = `${Date.now()}`
-    const hospitalNumber = `HOSP-CY-${suffix.slice(-8)}`
+    const hospitalNumber = hospitalNumberOverride || `HOSP-CY-${suffix.slice(-8)}`
     const nin = suffix.slice(-11).padStart(11, '0')
 
     // ─── 1. BIO DATA (expanded by default) ──────────────────────────────────
@@ -189,5 +229,7 @@ export const patientRegistration = () => {
         `create patient rejected.\nresponse: ${body}\nrequest: ${sent}`
       ).to.be.oneOf([200, 201])
     })
+
+    return hospitalNumber
   };
 

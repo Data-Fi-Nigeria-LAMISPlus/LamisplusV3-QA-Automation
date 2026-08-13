@@ -1,7 +1,9 @@
 name: UI Tests
 
-# Everything under cypress/e2e/ui/smoke — i.e. all UI modules except the OPD
-# consultation spec, which has its own workflow (opd-consultation.yml).
+# Everything under cypress/e2e/ui/smoke and cypress/e2e/ui/clinical — i.e. all UI
+# specs except the OPD consultation one, which has its own workflow
+# (opd-consultation.yml). smoke/ is login + registration surface; clinical/ is the
+# longer patient-journey flows (check-in, triage, vitals, posting on).
 on:
   push:
     branches: [master, main]
