@@ -1,23 +1,47 @@
 {
- "type": "module", 
-  "scripts": {
-    "cy:ui": "cypress run --config-file ui.config.js",
-    "cy:ui:open": "cypress open --config-file ui.config.js",
-    "cy:ui:opd-consultation": "cypress run --config-file ui.config.js --spec \"cypress/e2e/ui/opd-consultation/**/*.cy.js\"",
-    "cy:ui:nightly": "cypress run --config-file ui.config.js --spec \"cypress/e2e/ui/smoke/**/*.cy.js\"",
-    "cy:api": "cypress run --config-file api.config.js",
-    "cy:api:open": "cypress open --config-file api.config.js",
+ "type": "module",
+ "engines": {
+  "node": "^20.1.0 || ^22.0.0 || >=24.0.0"
+ },
+ "scripts": {
+  "clean:ui": "node -e \"require('fs').rmSync('cypress/reports/ui',{recursive:true,force:true})\"",
+  "clean:api": "node -e \"require('fs').rmSync('cypress/reports/api',{recursive:true,force:true})\"",
 
-    "report:ui": "marge cypress/reports/ui/*.json -f ui-report -o cypress/reports/ui/final",
-    "report:api": "marge cypress/reports/api/*.json -f api-report -o cypress/reports/api/final"
-  },
-  "dependencies": {
-    "cypress": "^15.14.0",
-    "dotenv": "^17.4.2"
-  },
-  "devDependencies": {
-    "mochawesome": "^7.1.4",
-    "mochawesome-merge": "^5.1.1",
-    "mochawesome-report-generator": "^6.3.2"
-  }
+  "precy:ui": "npm run clean:ui",
+  "cy:ui": "cypress run --config-file ui.config.js --spec \"cypress/e2e/ui/smoke/**/*.cy.js\"",
+  "cy:ui:dev": "npm run cy:ui -- --env env=dev",
+  "cy:ui:qa": "npm run cy:ui -- --env env=qa",
+  "cy:ui:prod": "npm run cy:ui -- --env env=prod",
+
+  "precy:ui:all": "npm run clean:ui",
+  "cy:ui:all": "cypress run --config-file ui.config.js",
+  "cy:ui:open": "cypress open --config-file ui.config.js",
+
+  "precy:ui:opd-consultation": "npm run clean:ui",
+  "cy:ui:opd-consultation": "cypress run --config-file ui.config.js --spec \"cypress/e2e/ui/opd-consultation/**/*.cy.js\"",
+  "cy:ui:opd-consultation:dev": "npm run cy:ui:opd-consultation -- --env env=dev",
+  "cy:ui:opd-consultation:qa": "npm run cy:ui:opd-consultation -- --env env=qa",
+  "cy:ui:opd-consultation:prod": "npm run cy:ui:opd-consultation -- --env env=prod",
+  "cy:ui:open:opd-consultation": "cypress open --config-file ui.config.js --config \"specPattern=cypress/e2e/ui/opd-consultation/**/*.cy.js\"",
+  "cy:ui:open:opd-consultation:qa": "npm run cy:ui:open:opd-consultation -- --env env=qa",
+
+  "precy:api": "npm run clean:api",
+  "cy:api": "cypress run --config-file api.config.js",
+  "cy:api:open": "cypress open --config-file api.config.js",
+  "cy:api:dev": "npm run cy:api -- --env env=dev",
+  "cy:api:qa": "npm run cy:api -- --env env=qa",
+  "cy:api:prod": "npm run cy:api -- --env env=prod",
+
+  "report:ui": "mochawesome-merge \"cypress/reports/ui/*.json\" -o cypress/reports/ui/final/merged.json && marge cypress/reports/ui/final/merged.json -f ui-report -o cypress/reports/ui/final",
+  "report:api": "mochawesome-merge \"cypress/reports/api/*.json\" -o cypress/reports/api/final/merged.json && marge cypress/reports/api/final/merged.json -f api-report -o cypress/reports/api/final"
+ },
+ "dependencies": {
+  "cypress": "^15.14.0",
+  "dotenv": "^17.4.2"
+ },
+ "devDependencies": {
+  "mochawesome": "^1.5.5",
+  "mochawesome-merge": "^5.1.1",
+  "mochawesome-report-generator": "^6.3.2"
+ }
 }

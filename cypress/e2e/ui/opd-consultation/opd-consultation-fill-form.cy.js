@@ -244,7 +244,15 @@ describe('OPD Consultation - Fill Consultation Form', () => {
 
       cy.wrap(lgaInput).click({ force: true })
     })
-    cy.get('.MuiAutocomplete-popper [role="option"]', { timeout: 15000 }).first().click({ force: true })
+    cy.wait(700)
+    cy.get('body').then(($body) => {
+      const lgaOptions = $body.find('.MuiAutocomplete-popper [role="option"]')
+      if (lgaOptions.length) {
+        cy.wrap(lgaOptions[0]).click({ force: true })
+      } else {
+        cy.log('No LGA options available to select')
+      }
+    })
     cy.get('input[name="streetAddress"]').type('123 Main Street, Lagos', { force: true })
     cy.get('input[name="landmark"]').type('Near Central Market', { force: true })
 

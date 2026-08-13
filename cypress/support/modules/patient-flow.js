@@ -3,6 +3,12 @@ export const locator = {
   FIRST_NAME_INPUT: 'input[name="firstName"]',
   MIDDLE_NAME_INPUT: 'input[name="middleName"]',
   LAST_NAME_INPUT: 'input[name="lastName"]',
+  // BioDataSection renders Sex through the shared Select, which emits a native
+  // <select name="sex">. This key was referenced below but never defined.
+  SEX_SELECT: 'select[name="sex"]',
+  DOB_ESTIMATED_RADIO: '[data-cy="patient-dob-estimated"]',
+  AGE_INPUT: 'input[name="age"]',
+  AGE_UNIT_SELECT: 'select[name="ageUnit"]',
   DATE_OF_BIRTH_INPUT: 'input[name="dateOfBirth"]',
   DATE_OF_REGISTRATION_INPUT: 'input[name="dateOfRegistration"]',
   HOSPITAL_NUMBER_INPUT: 'input[name="hospitalNumber"]',
@@ -53,152 +59,135 @@ export const locator = {
     MARITAL_STATUS_SELECT: 'select[name="maritalStatus"]',
 
 }
-export const selectAutocompleteOption = (placeholder, optionText) => {
-      cy.get(`input[placeholder="${placeholder}"]`, { timeout: 10000 })
-        .should('exist')
-        .click({ force: true })
-        .clear({ force: true })
-        .type(optionText, { force: true })
+// The deployed form uses react-select (classNamePrefix "ss"), not MUI Autocomplete,
+// so options live in .ss__option rather than .MuiAutocomplete-popper. The three
+// location pickers are the only comboboxes on the form, in DOM order:
+// 0 = Country, 1 = State, 2 = Province/District/LGA.
+export const selectLocationCombobox = (index, optionText) => {
+  cy.get('input[role="combobox"]', { timeout: 15000 })
+    .eq(index)
+    .should('not.be.disabled')
+    .click({ force: true })
+    .type(optionText, { force: true })
 
-      cy.get(locator.AUTOCOMPLETE_POPUP_OPTIONS, { timeout: 10000 })
-        .contains(new RegExp(optionText, 'i'))
-        .click({ force: true })
+  cy.get('.ss__option', { timeout: 15000 })
+    .contains(new RegExp(optionText, 'i'))
+    .click({ force: true })
+}
+
+// Date of Registration / Date of Birth are MUI pickers rendered read-only
+// (aria-readonly on every section, readonly on the hidden input), so the value
+// cannot be typed - it has to come from the calendar popup.
+export const pickDateFromCalendar = (index) => {
+  cy.get('button[aria-label*="Choose date"]', { timeout: 15000 }).eq(index).click({ force: true })
+  cy.get('[role="dialog"]', { timeout: 15000 }).should('be.visible')
+  cy.get('[role="dialog"]').then(($dialog) => {
+    const today = $dialog.find('button[aria-current="date"]:not([disabled])')
+    if (today.length) {
+      cy.wrap(today.first()).click({ force: true })
+    } else {
+      cy.wrap($dialog).find('button:not([disabled])[role="gridcell"]').first().click({ force: true })
     }
+  })
+  cy.get('[role="dialog"]').should('not.exist')
+}
+
+export const selectFirstRealOption = (selector) => {
+  cy.get(selector, { timeout: 15000 }).then(($sel) => {
+    const options = [...$sel[0].options].map((o) => o.value).filter(Boolean)
+    if (options.length) cy.wrap($sel).select(options[0], { force: true })
+  })
+}
 
 export const patientRegistration = () => {
-        // Step 2: Navigate directly to the registration form
-    cy.visit('/ehr/registration/register')
-    cy.wait(4000)
-    cy.get(locator.FIRST_NAME_INPUT, { timeout: 10000 }).should('exist')
-    cy.log('Registration form loaded')
+    // '/ehr/registration/register' 404s on the deployed app; the live route is
+    // '/patients/register'.
+    cy.visit('/patients/register')
+    cy.get(locator.FIRST_NAME_INPUT, { timeout: 30000 }).should('exist')
 
-    // ─── 1. BIO DATA (defaultExpanded — already open) ──────────────────────
-    cy.get(locator.DATE_OF_REGISTRATION_INPUT).type('2026-03-24', { force: true })
-    cy.wait(200)
-    cy.get(locator.HOSPITAL_NUMBER_INPUT).type('HOSP-TEST-001', { force: true })
-    cy.wait(200)
-    cy.get(locator.NATIONAL_ID_INPUT).type('12345678901', { force: true })
-    cy.wait(200)
-    cy.get(locator.FIRST_NAME_INPUT ).type('John', { force: true })
-    cy.wait(200)
-    cy.get(locator.MIDDLE_NAME_INPUT).type('David', { force: true })
-    cy.wait(200)
-    cy.get(locator.LAST_NAME_INPUT).type('Doe', { force: true })
-    cy.wait(200)
-    cy.get(locator.SEX_SELECT).then($sel => {
-      const opts = [...$sel[0].options].map(o => o.value).filter(v => v)
-      if (opts.length) cy.wrap($sel).select(opts[0], { force: true })
-    })
-    cy.wait(200)
-    cy.get(locator.DATE_OF_BIRTH_INPUT).type('1990-01-15', { force: true })
-    cy.wait(500)
+    // Unique per run so repeat runs cannot collide on hospital number / NIN.
+    const suffix = `${Date.now()}`
+    const hospitalNumber = `HOSP-CY-${suffix.slice(-8)}`
+    const nin = suffix.slice(-11).padStart(11, '0')
 
-    // ─── 2. REGISTRATION DETAILS (collapsed — click header to expand) ───────
+    // ─── 1. BIO DATA (expanded by default) ──────────────────────────────────
+    pickDateFromCalendar(0) // Date of Registration -> today
+    cy.get(locator.HOSPITAL_NUMBER_INPUT).clear({ force: true }).type(hospitalNumber, { force: true })
+    cy.get(locator.NATIONAL_ID_INPUT).clear({ force: true }).type(nin, { force: true })
+    cy.get(locator.FIRST_NAME_INPUT).clear({ force: true }).type('John', { force: true })
+    cy.get(locator.MIDDLE_NAME_INPUT).clear({ force: true }).type('David', { force: true })
+    cy.get(locator.LAST_NAME_INPUT).clear({ force: true }).type('Doe', { force: true })
+    selectFirstRealOption(locator.SEX_SELECT)
+
+    // Date of Birth: switch the type to "Estimated" and supply an age instead of
+    // driving the second calendar. The calendar disables future months, so it can
+    // only land on today, which the API rejects (age 0 days) as a business-rule
+    // violation. The control is a custom radio - the click target is the div
+    // carrying data-cy, not the adjacent label text.
+    cy.get(locator.DOB_ESTIMATED_RADIO).click({ force: true })
+    cy.get(locator.AGE_INPUT, { timeout: 15000 }).clear({ force: true }).type('35', { force: true })
+    cy.get(locator.AGE_UNIT_SELECT).select('Years', { force: true })
+
+    // ─── 2. REGISTRATION DETAILS ────────────────────────────────────────────
     cy.contains('button', 'Registration Details').click({ force: true })
-    cy.wait(1500)
-    cy.get(locator.MARITAL_STATUS_SELECT, { timeout: 10000 }).should('exist')
-    cy.get(locator.MARITAL_STATUS_SELECT).then($sel => {
-      const opts = [...$sel[0].options].map(o => o.value).filter(v => v)
-      if (opts.length) cy.wrap($sel).select(opts[0], { force: true })
-    })
-    cy.wait(200)
-    cy.get(locator.EMPLOYMENT_STATUS_SELECT).then($sel => {
-      const opts = [...$sel[0].options].map(o => o.value).filter(v => v)
-      if (opts.length) cy.wrap($sel).select(opts[0], { force: true })
-    })
-    cy.wait(200)
-    cy.get(locator.EDUCATION_LEVEL_SELECT).then($sel => {
-      const opts = [...$sel[0].options].map(o => o.value).filter(v => v)
-      if (opts.length) cy.wrap($sel).select(opts[0], { force: true })
-    })
-    cy.wait(200)
-    cy.get(locator.PHONE_NUMBER_INPUT).clear({ force: true }).type('+2348012345678', { force: true })
-    cy.wait(200)
-    cy.get(locator.ALTERNATIVE_PHONE_NUMBER_INPUT).clear({ force: true }).type('+2348087654321', { force: true })
-    cy.wait(200)
-    cy.get(locator.EMAIL_INPUT).type('john.doe@example.com', { force: true })
-    cy.wait(200)
-    selectAutocompleteOption('Select country', 'Nigeria')
-    cy.wait(1500)
-    selectAutocompleteOption('Select state', 'Lagos')
-    cy.wait(1500)
-    cy.get(locator.LGA_INPUT, { timeout: 10000 })
-      .should('exist')
-      .click({ force: true })
-    cy.get(locator.LGA_OPTION, { timeout: 10000 }).first().click({ force: true })
-    cy.wait(500)
-    cy.get(locator.STREET_ADDRESS_INPUT).type('123 Main Street, Lagos', { force: true })
-    cy.wait(200)
-    cy.get(locator.LANDMARK_INPUT).type('Near Central Market', { force: true })
-    cy.wait(200)
+    cy.get(locator.MARITAL_STATUS_SELECT, { timeout: 15000 }).should('exist')
+    selectFirstRealOption(locator.MARITAL_STATUS_SELECT)
+    selectFirstRealOption(locator.EMPLOYMENT_STATUS_SELECT)
+    selectFirstRealOption(locator.EDUCATION_LEVEL_SELECT)
+    cy.get(locator.PHONE_NUMBER_INPUT).clear({ force: true }).type('08012345678', { force: true })
+    cy.get(locator.ALTERNATIVE_PHONE_NUMBER_INPUT).clear({ force: true }).type('08087654321', { force: true })
+    cy.get(locator.EMAIL_INPUT).clear({ force: true }).type(`john.${suffix}@example.com`, { force: true })
 
-    // ─── 3. NEXT OF KIN (collapsed — click header to expand) ────────────────
+    // Country -> State -> LGA cascade; each unlocks the next.
+    selectLocationCombobox(0, 'Nigeria')
+    selectLocationCombobox(1, 'Lagos')
+    cy.get('input[role="combobox"]').eq(2).should('not.be.disabled').click({ force: true })
+    cy.get('.ss__option', { timeout: 15000 }).first().click({ force: true })
+
+    cy.get(locator.STREET_ADDRESS_INPUT).clear({ force: true }).type('123 Main Street, Lagos', { force: true })
+    cy.get(locator.LANDMARK_INPUT).clear({ force: true }).type('Near Central Market', { force: true })
+
+    // ─── 3. NEXT OF KIN ─────────────────────────────────────────────────────
     cy.contains('button', 'Next of Kin Details').click({ force: true })
-    cy.wait(1000)
-    cy.get(locator.RELATIONSHIP_TYPE_SELECT, { timeout: 10000 }).should('exist')
-    cy.get(locator.RELATIONSHIP_TYPE_SELECT).then($sel => {
-      const opts = [...$sel[0].options].map(o => o.value).filter(v => v)
-      if (opts.length) cy.wrap($sel).select(opts[0], { force: true })
-    })
-    cy.wait(200)
-    cy.get(locator.KIN_FIRST_NAME_INPUT).type('Jane', { force: true })
-    cy.wait(200)
-    cy.get(locator.KIN_MIDDLE_NAME_INPUT).type('Mary', { force: true })
-    cy.wait(200)
-    cy.get(locator.KIN_LAST_NAME_INPUT).type('Doe', { force: true })
-    cy.wait(200)
-    cy.get(locator.KIN_PHONE_NUMBER_INPUT).clear({ force: true }).type('+2349012345678', { force: true })
-    cy.wait(200)
-    cy.get(locator.KIN_EMAIL_INPUT).type('jane.doe@example.com', { force: true })
-    cy.wait(200)
-    cy.get(locator.KIN_ADDRESS_INPUT).type('456 Secondary Street, Lagos', { force: true })
-    cy.wait(200)
+    cy.get(locator.RELATIONSHIP_TYPE_SELECT, { timeout: 15000 }).should('exist')
+    selectFirstRealOption(locator.RELATIONSHIP_TYPE_SELECT)
+    cy.get(locator.KIN_FIRST_NAME_INPUT).clear({ force: true }).type('Jane', { force: true })
+    cy.get(locator.KIN_MIDDLE_NAME_INPUT).clear({ force: true }).type('Mary', { force: true })
+    cy.get(locator.KIN_LAST_NAME_INPUT).clear({ force: true }).type('Doe', { force: true })
+    cy.get(locator.KIN_PHONE_NUMBER_INPUT).clear({ force: true }).type('09012345678', { force: true })
+    cy.get(locator.KIN_EMAIL_INPUT).clear({ force: true }).type(`jane.${suffix}@example.com`, { force: true })
+    cy.get(locator.KIN_ADDRESS_INPUT).clear({ force: true }).type('456 Secondary Street, Lagos', { force: true })
 
-    // ─── 4. EMERGENCY CONTACT (collapsed — click header to expand) ──────────
+    // ─── 4. EMERGENCY CONTACT ───────────────────────────────────────────────
     cy.contains('button', 'Emergency Contact').click({ force: true })
-    cy.wait(1000)
-    cy.get(locator.EMERGENCY_FIRST_NAME_INPUT, { timeout: 10000 }).should('exist')
-    cy.get(locator.EMERGENCY_FIRST_NAME_INPUT).type('Michael', { force: true })
-    cy.wait(200)
-    cy.get(locator.EMERGENCY_LAST_NAME_INPUT).type('Smith', { force: true })
-    cy.wait(200)
-    cy.get(locator.EMERGENCY_PHONE_NUMBER_INPUT).clear({ force: true }).type('+2347012345678', { force: true })
-    cy.wait(200)
-    cy.get(locator.EMERGENCY_EMAIL_INPUT).type('michael.smith@example.com', { force: true })
-    cy.wait(200)
-    cy.get(locator.EMERGENCY_RELATIONSHIP_TYPE_SELECT).then($sel => {
-      const opts = [...$sel[0].options].map(o => o.value).filter(v => v)
-      if (opts.length) cy.wrap($sel).select(opts[0], { force: true })
-    })
-    cy.wait(200)
-    cy.get(locator.EMERGENCY_ADDRESS_INPUT).type('789 Third Avenue, Lagos', { force: true })
-    cy.wait(200)
+    cy.get(locator.EMERGENCY_FIRST_NAME_INPUT, { timeout: 15000 }).should('exist')
+    cy.get(locator.EMERGENCY_FIRST_NAME_INPUT).clear({ force: true }).type('Michael', { force: true })
+    cy.get(locator.EMERGENCY_LAST_NAME_INPUT).clear({ force: true }).type('Smith', { force: true })
+    cy.get(locator.EMERGENCY_PHONE_NUMBER_INPUT).clear({ force: true }).type('07012345678', { force: true })
+    cy.get(locator.EMERGENCY_EMAIL_INPUT).clear({ force: true }).type(`michael.${suffix}@example.com`, { force: true })
+    selectFirstRealOption(locator.EMERGENCY_RELATIONSHIP_TYPE_SELECT)
+    cy.get(locator.EMERGENCY_ADDRESS_INPUT).clear({ force: true }).type('789 Third Avenue, Lagos', { force: true })
 
-    // ─── 5. BILLING INFORMATION (collapsed — click header to expand) ─────────
+    // ─── 5. BILLING INFORMATION ─────────────────────────────────────────────
     cy.contains('button', 'Billing Information').click({ force: true })
-    cy.wait(1000)
-    cy.get(locator.BILLING_TYPE_SELECT, { timeout: 10000 }).should('exist')
-    cy.get(locator.BILLING_TYPE_SELECT).then($sel => {
-      const opts = [...$sel[0].options].map(o => o.value).filter(v => v)
-      if (opts.length) cy.wrap($sel).select(opts[0], { force: true })
-    })
-    cy.wait(200)
-    cy.get(locator.ORGANISATION_EMPLOYER_INPUT).type('ABC Corporation', { force: true })
-    cy.wait(200)
+    cy.get(locator.BILLING_TYPE_SELECT, { timeout: 15000 }).should('exist')
+    selectFirstRealOption(locator.BILLING_TYPE_SELECT)
+    cy.get(locator.ORGANISATION_EMPLOYER_INPUT).clear({ force: true }).type('ABC Corporation', { force: true })
 
-    // ─── SAVE ────────────────────────────────────────────────────────────────
-    cy.wait(500)
+    // ─── SAVE ───────────────────────────────────────────────────────────────
+    cy.intercept('POST', '**/patient**').as('createPatient')
     cy.contains('button', 'Save').click({ force: true })
-    cy.wait(4000)
-    cy.screenshot('patient-registration-complete')
 
-    cy.get('body').then($body => {
-      const text = $body.text()
-      if (text.includes('success') || text.includes('created') || text.includes('registered')) {
-        cy.log('Patient registered successfully')
-      } else {
-        cy.log('Form submitted - check screenshot for result')
-      }
+    // Assert the patient was actually created rather than just screenshotting.
+    // The server's validation payload is folded into the assertion message so a
+    // rejection names the offending field instead of just a status code.
+    cy.wait('@createPatient', { timeout: 30000 }).then(({ request, response }) => {
+      const body = typeof response?.body === 'string' ? response.body : JSON.stringify(response?.body)
+      const sent = typeof request?.body === 'string' ? request.body : JSON.stringify(request?.body)
+      expect(
+        response?.statusCode,
+        `create patient rejected.\nresponse: ${body}\nrequest: ${sent}`
+      ).to.be.oneOf([200, 201])
     })
   };
 

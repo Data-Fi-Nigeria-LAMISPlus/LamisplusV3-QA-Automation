@@ -1,15 +1,28 @@
-name: API Tests (Nightly)
+name: API Tests
 
 on:
   push:
     branches: [master, main]
   workflow_dispatch:
+    inputs:
+      target_env:
+        description: "Target environment: dev, qa, or prod"
+        required: true
+        default: qa
+        type: choice
+        options:
+          - dev
+          - qa
+          - prod
   schedule:
     # 03:00 UTC = 06:00 EAT (Africa/Nairobi, UTC+3, no DST)
     - cron: '0 3 * * *'
 
 env:
   CI: true
+  DEV_BASE_URL: ${{ secrets.DEV_BASE_URL }}
+  QA_BASE_URL: ${{ secrets.QA_BASE_URL }}
+  PROD_BASE_URL: ${{ secrets.PROD_BASE_URL }}
 
 jobs:
   api-tests:
@@ -18,24 +31,33 @@ jobs:
     env:
       EMAIL: ${{ secrets.EMAIL }}
       PASSWORD: ${{ secrets.PASSWORD }}
+      TARGET_ENV: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.target_env || 'qa' }}
 
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 18.18.2
+          # Cypress 15 requires Node ^20.1.0 || ^22.0.0 || >=24.0.0
+          node-version: 20.19.0
           cache: npm
 
       - run: npm ci
 
       - name: Run API Tests
-        run: npm run cy:api
+        id: run_api_tests
+        run: npm run cy:api:${{ env.TARGET_ENV }}
 
       - name: Generate API Report
+        if: always()
         run: npm run report:api
 
+      - name: API Test Summary
+        if: always()
+        run: node scripts/ci-test-summary.js cypress/reports/api "API" "${{ steps.run_api_tests.outcome }}"
+
       - name: Upload API Report
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: api-report
