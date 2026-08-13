@@ -85,6 +85,9 @@ export const fillContactInfo = (data) => {
 }
 
 export const navigateToRegistration = () => {
+  // Verified against the deployed app: '/patients/register' serves the form
+  // (input[name="firstName"] present). The '/ehr/*' scheme in the app source is
+  // not deployed yet - '/ehr/registration/register' returns 404 there.
   cy.visit('/patients/register')
   cy.get('input[name="firstName"]', { timeout: 15000 }).should('exist')
   cy.wait(mediumPause)

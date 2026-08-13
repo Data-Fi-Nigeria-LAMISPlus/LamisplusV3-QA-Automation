@@ -19,7 +19,13 @@ function collectJsonFiles(reportDir) {
 
   return fs
     .readdirSync(reportDir, { withFileTypes: true })
-    .filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith(".json"))
+    .filter((entry) => {
+      if (!entry.isFile()) return false;
+      const name = entry.name.toLowerCase();
+      // Skip the merged report: it restates every per-spec file and would
+      // double every count if it ever lands in this directory.
+      return name.endsWith(".json") && name !== "merged.json";
+    })
     .map((entry) => path.join(reportDir, entry.name));
 }
 
@@ -43,22 +49,16 @@ function readStats(filePath) {
 }
 
 function buildSummary({ suiteName, tests, passes, failures, passPct, failPct, hasFailures, testStepOutcome }) {
-  const testStepFailed = testStepOutcome === "failure";
-  
   let statusLine;
   let badge;
   let reviewNote;
-  
-  if (testStepFailed) {
-    statusLine = "\n\n⚠️ **TEST FAILED**: One or more tests failed.";
-    badge = "⚠️ !Some tests failed and need review.";
-    reviewNote = "\n\n📋 **Review Details By Clicking Report To Download**: Download the full test report from the Artifacts section to see detailed failure information.";
-  } else if (hasFailures && tests > 0) {
-    statusLine = "\n\n⚠️ **TEST FAILED**: One or more tests failed.";
-    badge = "⚠️ !Some tests failed and need review.";
-    reviewNote = "\n\n📋 **Review Details By Clicking Report To Download**: Download the full test report from the Artifacts section to see detailed failure information.";
+
+  if (hasFailures) {
+    statusLine = "⚠️ **TEST FAILED**: One or more tests failed.";
+    badge = "⚠️ Some tests failed and need review.";
+    reviewNote = "\n📋 **Review Details By Clicking Report To Download**: Download the full test report from the Artifacts section to see detailed failure information.\n";
   } else {
-    statusLine = "\n\n✓ **SUCCESS**: All tests passed.";
+    statusLine = "✓ **SUCCESS**: All tests passed.";
     badge = "✓ All tests passed successfully!";
     reviewNote = "";
   }
@@ -66,7 +66,6 @@ function buildSummary({ suiteName, tests, passes, failures, passPct, failPct, ha
   const title = `### ${suiteName} Test Summary`;
 
   const table = [
-    "",
     "| Metric | Count | Percentage |",
     "|---|---:|---:|",
     `| Total Tests | ${tests} | 100.00% |`,
@@ -76,7 +75,7 @@ function buildSummary({ suiteName, tests, passes, failures, passPct, failPct, ha
     `- Cypress step outcome: ${testStepOutcome}`,
   ].join("\n");
 
-  return `${statusLine}${badge}${table}${reviewNote}\n`;
+  return [title, "", statusLine, "", badge, "", table, reviewNote].join("\n");
 }
 
 function appendStepSummary(markdown) {

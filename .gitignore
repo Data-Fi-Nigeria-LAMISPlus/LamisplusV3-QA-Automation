@@ -3,4 +3,4 @@ env/
 .env
 cypress/reports
 cypress/videos
-cypress/screnshots
+cypress/screenshots
