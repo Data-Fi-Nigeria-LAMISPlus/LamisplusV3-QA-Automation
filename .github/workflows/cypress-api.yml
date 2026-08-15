@@ -81,6 +81,7 @@ jobs:
       # Optional - see the note in cypress-ui.yml for the secrets this needs.
       # Skipped entirely when MAIL_SERVER is unset.
       - name: Build email summary
+        continue-on-error: true
         if: always() && env.MAIL_SERVER != ''
         id: email
         run: |
@@ -88,6 +89,7 @@ jobs:
           echo "subject=$subject" >> "$GITHUB_OUTPUT"
 
       - name: Email the report
+        continue-on-error: true
         if: always() && env.MAIL_SERVER != ''
         uses: dawidd6/action-send-mail@6063705cefe50cb915fc53bb5edffb3dc2feb3f7 # v3.12.0
         with:
@@ -105,6 +107,7 @@ jobs:
 
       # Teams, as an alternative or an addition to email - see cypress-ui.yml.
       - name: Notify Teams
+        continue-on-error: true
         if: always() && env.TEAMS_WEBHOOK != ''
         run: |
           node scripts/report-teams.js cypress/reports/api API
