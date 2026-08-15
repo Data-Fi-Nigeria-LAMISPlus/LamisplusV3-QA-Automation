@@ -60,11 +60,35 @@ const spyLogin = () => cy.intercept('POST', LOGIN_API).as('loginRequest')
 
 // ── real-login scenarios ────────────────────────────────────────────────────
 
-export const login = () => {
+// The happy path, used as setup by most other specs.
+//
+// Survives one throttle: the login endpoint allows 10 requests/min per IP, and
+// the scenarios above spend most of that budget, so a genuine login later in the
+// same minute can come back rejected and leave the browser sitting on /login.
+// That produced an intermittent "expected .../login to not include '/login'"
+// failure in whichever spec happened to run next. One retry after the window
+// rolls is enough; a second consecutive rejection still fails the test, so a
+// real authentication break is not masked.
+const attemptLogin = () => {
   cy.visit('/login')
   typeEmail(EMAIL)
   typePassword(PASSWORD)
   submit()
+}
+
+export const login = () => {
+  spyLogin()
+  attemptLogin()
+
+  cy.wait('@loginRequest', { timeout: 30000 }).then(({ response }) => {
+    const status = response?.statusCode
+    if (status && status >= 200 && status < 400) return
+
+    cy.log(`login rejected with ${status}, waiting for the rate-limit window to roll`)
+    cy.wait(35000)
+    attemptLogin()
+  })
+
   expectLoggedIn()
 }
 
