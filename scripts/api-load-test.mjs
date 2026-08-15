@@ -37,6 +37,8 @@ const flag = (name, fallback) => {
   return value === undefined || value.startsWith("--") ? true : value;
 };
 
+const stagesFlag = flag("stages", null);
+
 const CONFIG = {
   vus: Number(flag("vus", 10)),
   duration: Number(flag("duration", 60)),      // seconds of sustained load
@@ -45,6 +47,27 @@ const CONFIG = {
   thresholdErrorRate: Number(flag("error-rate", 1)), // percent
   baselineOnly: Boolean(flag("baseline-only", false)),
   outDir: String(flag("out", "cypress/reports/perf")),
+
+  // Performance mode's own budget. A percentile means nothing on one sample per
+  // endpoint, so the performance run is graded on a flat per-endpoint ceiling
+  // instead: is any single endpoint slow when nothing else is happening?
+  //
+  // 2500ms rather than something tighter because the same endpoint measures very
+  // differently depending on where the test runs. From a machine on the same
+  // network the register answers in ~115ms; from a GitHub runner it is ~280ms,
+  // and the slowest endpoint scales with it. A budget tuned to a laptop fails
+  // every CI run for reasons that have nothing to do with the API. Tighten it
+  // per environment with --max-endpoint-ms.
+  maxEndpointMs: Number(flag("max-endpoint-ms", 2500)),
+
+  // Stress mode: --stages 10,25,50,100 walks up through those user counts,
+  // measuring each separately. One number tells you whether it coped at that
+  // level; a set of them tells you where it stops coping, which is the question
+  // worth asking before a rollout.
+  stages: typeof stagesFlag === "string"
+    ? stagesFlag.split(",").map((value) => Number(value.trim())).filter((value) => value > 0)
+    : null,
+  stageDuration: Number(flag("stage-duration", 30)),
 };
 
 // The read endpoints the application leans on. Weights approximate how often a
@@ -207,24 +230,28 @@ async function baselinePass(base, env) {
   return results;
 }
 
-async function loadPass(base, env) {
+async function loadPass(base, env, { vus, duration, rampUp, quiet = false } = {}) {
+  const users = vus ?? CONFIG.vus;
+  const seconds = duration ?? CONFIG.duration;
+  const ramp = rampUp ?? CONFIG.rampUp;
+
   const pick = weightedPicker(ENDPOINTS);
   const samples = [];
   const perEndpoint = new Map(ENDPOINTS.map((endpoint) => [endpoint.name, []]));
   const statuses = new Map();
   let stop = false;
 
-  const rampMs = CONFIG.rampUp * 1000;
-  const totalMs = rampMs + CONFIG.duration * 1000;
+  const rampMs = ramp * 1000;
+  const totalMs = rampMs + seconds * 1000;
   const startedAt = Date.now();
 
-  console.log(
-    `\nLoad - ${CONFIG.vus} virtual users, ${CONFIG.rampUp}s ramp then ${CONFIG.duration}s sustained\n`
-  );
+  if (!quiet) {
+    console.log(`\nLoad - ${users} virtual users, ${ramp}s ramp then ${seconds}s sustained\n`);
+  }
 
   const virtualUser = async (index) => {
     // Stagger arrivals across the ramp so load builds rather than spikes.
-    await new Promise((resolve) => setTimeout(resolve, Math.round((rampMs / CONFIG.vus) * index)));
+    await new Promise((resolve) => setTimeout(resolve, Math.round((rampMs / users) * index)));
 
     while (!stop && Date.now() - startedAt < totalMs) {
       const endpoint = pick();
@@ -237,17 +264,128 @@ async function loadPass(base, env) {
     }
   };
 
-  const progress = setInterval(() => {
-    const elapsed = Math.round((Date.now() - startedAt) / 1000);
-    process.stdout.write(`  ${elapsed}s elapsed, ${samples.length} requests\r`);
-  }, 5000);
+  const progress = quiet
+    ? null
+    : setInterval(() => {
+        const elapsed = Math.round((Date.now() - startedAt) / 1000);
+        process.stdout.write(`  ${elapsed}s elapsed, ${samples.length} requests\r`);
+      }, 5000);
 
-  await Promise.all(Array.from({ length: CONFIG.vus }, (_, index) => virtualUser(index)));
+  await Promise.all(Array.from({ length: users }, (_, index) => virtualUser(index)));
   stop = true;
-  clearInterval(progress);
+  if (progress) clearInterval(progress);
 
   const wallSeconds = (Date.now() - startedAt) / 1000;
-  return { samples, perEndpoint, statuses, wallSeconds };
+  const countWhere = (test) =>
+    [...statuses.entries()].filter(([status]) => test(status)).reduce((sum, [, count]) => sum + count, 0);
+
+  // 429 is kept apart from the failures on purpose. Being throttled is the API
+  // protecting itself and answering correctly; a 500 is the API breaking. Adding
+  // them together reads as "12% errors" when nothing actually failed, which is
+  // the difference between a capacity note and an incident.
+  const ok = countWhere((status) => /^2\d\d$/.test(status));
+  const throttled = countWhere((status) => status === "429");
+  const failed = samples.length - ok - throttled;
+
+  return {
+    samples,
+    perEndpoint,
+    statuses,
+    wallSeconds,
+    users,
+    errorRate: samples.length ? (failed / samples.length) * 100 : 0,
+    throttleRate: samples.length ? (throttled / samples.length) * 100 : 0,
+    throughput: samples.length / wallSeconds,
+  };
+}
+
+// Walks up through the requested user counts, measuring each level on its own.
+//
+// The interesting output is not any single row but the shape of the columns:
+// while throughput keeps rising and p95 stays flat there is headroom, and the
+// level where throughput stops rising but latency climbs is the one to quote.
+async function stagedPass(base, env) {
+  console.log(`\nStress - stages of ${CONFIG.stages.join(", ")} users, ${CONFIG.stageDuration}s each\n`);
+  console.log(
+    `  ${pad("users", 8)}${padLeft("requests", 10)}${padLeft("req/s", 9)}${padLeft("p50", 7)}${padLeft("p95", 7)}${padLeft("p99", 7)}${padLeft("throttled", 11)}${padLeft("failed", 9)}`
+  );
+  console.log(`  ${"-".repeat(68)}`);
+
+  const stages = [];
+  for (const users of CONFIG.stages) {
+    const result = await loadPass(base, env, {
+      vus: users,
+      duration: CONFIG.stageDuration,
+      // A short ramp inside each stage; the previous stage already warmed things.
+      rampUp: Math.min(5, Math.max(1, Math.round(users / 10))),
+      quiet: true,
+    });
+
+    const stats = summarise(result.samples);
+    const row = {
+      users,
+      requests: stats.count,
+      throughput: Number(result.throughput.toFixed(1)),
+      p50: Math.round(stats.p50),
+      p95: Math.round(stats.p95),
+      p99: Math.round(stats.p99),
+      errorRate: Number(result.errorRate.toFixed(2)),
+      throttleRate: Number(result.throttleRate.toFixed(2)),
+      statuses: Object.fromEntries(result.statuses),
+    };
+    stages.push(row);
+
+    // "Healthy" means fast and not failing. Throttling is reported beside it
+    // rather than folded into it - see the note in loadPass.
+    const withinThresholds =
+      row.p95 <= CONFIG.thresholdP95 && row.errorRate <= CONFIG.thresholdErrorRate && row.throttleRate === 0;
+    console.log(
+      `  ${pad(users, 8)}${padLeft(row.requests, 10)}${padLeft(row.throughput, 9)}${padLeft(row.p50, 7)}${padLeft(
+        row.p95, 7
+      )}${padLeft(row.p99, 7)}${padLeft(row.throttleRate + "%", 11)}${padLeft(row.errorRate + "%", 9)}${
+        withinThresholds ? "" : row.errorRate > CONFIG.thresholdErrorRate ? "   <-- failing" : "   <-- throttled"
+      }`
+    );
+  }
+
+  // The highest level served in full: fast, nothing failing, and nothing turned
+  // away. Above this the API still answers, it just starts refusing some callers.
+  const healthy = stages.filter(
+    (s) => s.p95 <= CONFIG.thresholdP95 && s.errorRate <= CONFIG.thresholdErrorRate && s.throttleRate === 0
+  );
+  const best = healthy.length ? healthy[healthy.length - 1] : null;
+
+  // If throughput stops rising while users keep increasing, the ceiling may be
+  // this machine rather than the server. Worth saying out loud before anyone
+  // quotes the number as a server limit.
+  const peak = stages.reduce((max, s) => (s.throughput > max.throughput ? s : max), stages[0]);
+  const plateaued = peak !== stages[stages.length - 1];
+
+  const firstThrottled = stages.find((s) => s.throttleRate > 0);
+  const firstFailing = stages.find((s) => s.errorRate > CONFIG.thresholdErrorRate);
+
+  console.log(
+    best
+      ? `\n  served in full up to ${best.users} users at ${best.throughput} req/s (p95 ${best.p95}ms)`
+      : `\n  no stage was served in full`
+  );
+  if (firstThrottled) {
+    console.log(
+      `  rate limiting starts at ${firstThrottled.users} users (${firstThrottled.throttleRate}% of requests got 429)`
+    );
+    console.log(`  those callers were refused, not failed - the API answered correctly under pressure.`);
+  }
+  if (firstFailing) {
+    console.log(`  genuine failures appear at ${firstFailing.users} users (${firstFailing.errorRate}%)`);
+  }
+  if (plateaued) {
+    console.log(
+      `  throughput peaked at ${peak.users} users (${peak.throughput} req/s) and did not rise after.`
+    );
+    console.log(`  above that the load generator may be the limit, not the API - confirm from a bigger runner.`);
+  }
+
+  return { stages, highestHealthy: best, throughputPeak: peak, plateaued };
 }
 
 // ---------------------------------------------------------------------------
@@ -275,15 +413,34 @@ async function main() {
     baseline,
   };
 
+  // Stress mode replaces the single sustained pass with a walk up through levels.
+  if (CONFIG.stages) {
+    const staged = await stagedPass(base, env);
+    Object.assign(report, staged);
+
+    const breaches = [];
+    if (!staged.highestHealthy) {
+      breaches.push(`no stage met p95 <= ${CONFIG.thresholdP95}ms and errors <= ${CONFIG.thresholdErrorRate}%`);
+    }
+    report.breaches = breaches;
+
+    fs.mkdirSync(path.resolve(CONFIG.outDir), { recursive: true });
+    const stagedFile = path.join(path.resolve(CONFIG.outDir), "api-load.json");
+    fs.writeFileSync(stagedFile, JSON.stringify(report, null, 2));
+    console.log(`\n  report      ${stagedFile}`);
+
+    if (breaches.length) {
+      console.log(`\n  THRESHOLD BREACHED`);
+      breaches.forEach((breach) => console.log(`    - ${breach}`));
+      process.exitCode = 1;
+    }
+    return;
+  }
+
   if (!CONFIG.baselineOnly) {
-    const { samples, perEndpoint, statuses, wallSeconds } = await loadPass(base, env);
+    const { samples, perEndpoint, statuses, wallSeconds, errorRate, throttleRate, throughput } = await loadPass(base, env);
 
     const overall = summarise(samples);
-    const ok = [...statuses.entries()]
-      .filter(([status]) => /^2\d\d$/.test(status))
-      .reduce((sum, [, count]) => sum + count, 0);
-    const errorRate = samples.length ? ((samples.length - ok) / samples.length) * 100 : 0;
-    const throughput = samples.length / wallSeconds;
 
     console.log(`\n  ${pad("endpoint", 26)}${padLeft("n", 7)}${padLeft("p50", 8)}${padLeft("p95", 8)}${padLeft("p99", 8)}${padLeft("max", 8)}`);
     console.log(`  ${"-".repeat(65)}`);
@@ -302,6 +459,7 @@ async function main() {
     console.log(`\n  requests    ${samples.length} in ${wallSeconds.toFixed(1)}s (${throughput.toFixed(1)}/s)`);
     console.log(`  latency     p50 ${Math.round(overall.p50)}ms · p95 ${Math.round(overall.p95)}ms · p99 ${Math.round(overall.p99)}ms · max ${Math.round(overall.max)}ms`);
     console.log(`  responses   ${[...statuses.entries()].map(([status, count]) => `${status}×${count}`).join(", ")}`);
+    console.log(`  throttled   ${throttleRate.toFixed(2)}% (429 - refused, not failed)`);
     console.log(`  error rate  ${errorRate.toFixed(2)}%`);
 
     Object.assign(report, {
@@ -309,6 +467,7 @@ async function main() {
       byEndpoint,
       statuses: Object.fromEntries(statuses),
       errorRate: Number(errorRate.toFixed(2)),
+      throttleRate: Number(throttleRate.toFixed(2)),
     });
 
     const breaches = [];
@@ -335,8 +494,34 @@ async function main() {
     return;
   }
 
+  // Performance mode ends here: one request per endpoint, graded against a flat
+  // per-endpoint budget. Written to its own file so a performance run never
+  // overwrites a load run's numbers.
+  const slowest = [...baseline].sort((a, b) => b.ms - a.ms)[0];
+  const overBudget = baseline.filter((entry) => entry.ms > CONFIG.maxEndpointMs);
+  const notOk = baseline.filter((entry) => !entry.ok);
+
+  console.log(`\n  slowest     ${slowest.endpoint} at ${slowest.ms}ms`);
+  console.log(`  budget      ${CONFIG.maxEndpointMs}ms per endpoint`);
+
+  report.slowest = { endpoint: slowest.endpoint, ms: slowest.ms };
+  report.breaches = [
+    ...overBudget.map((entry) => `${entry.endpoint} took ${entry.ms}ms, over the ${CONFIG.maxEndpointMs}ms budget`),
+    ...notOk.map((entry) => `${entry.endpoint} answered ${entry.status}`),
+  ];
+
   fs.mkdirSync(path.resolve(CONFIG.outDir), { recursive: true });
-  fs.writeFileSync(path.join(path.resolve(CONFIG.outDir), "api-load.json"), JSON.stringify(report, null, 2));
+  const outFile = path.join(path.resolve(CONFIG.outDir), "api-performance.json");
+  fs.writeFileSync(outFile, JSON.stringify(report, null, 2));
+  console.log(`\n  report      ${outFile}`);
+
+  if (report.breaches.length) {
+    console.log(`\n  THRESHOLD BREACHED`);
+    report.breaches.forEach((breach) => console.log(`    - ${breach}`));
+    process.exitCode = 1;
+    return;
+  }
+  console.log(`\n  every endpoint within budget`);
 }
 
 main().catch((error) => {

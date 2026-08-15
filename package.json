@@ -33,9 +33,10 @@
   "report:ui:pdf": "node scripts/report-to-pdf.js cypress/reports/ui UI ui-report",
   "report:api": "node scripts/merge-reports.js cypress/reports/api api-report && npm run report:api:pdf",
   "report:api:pdf": "node scripts/report-to-pdf.js cypress/reports/api API api-report",
-  "perf:api": "node scripts/api-load-test.mjs",
-  "perf:api:baseline": "node scripts/api-load-test.mjs --baseline-only",
-  "perf:api:soak": "node scripts/api-load-test.mjs --vus 25 --duration 300 --ramp 30"
+  "perf:api": "node scripts/api-load-test.mjs --baseline-only",
+  "load:api": "node scripts/api-load-test.mjs",
+  "load:api:stress": "node scripts/api-load-test.mjs --stages 10,25,50,100 --stage-duration 30",
+  "load:api:soak": "node scripts/api-load-test.mjs --vus 25 --duration 300 --ramp 30"
  },
  "dependencies": {
   "cypress": "^15.14.0",
