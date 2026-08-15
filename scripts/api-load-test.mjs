@@ -48,6 +48,11 @@ const CONFIG = {
   baselineOnly: Boolean(flag("baseline-only", false)),
   outDir: String(flag("out", "cypress/reports/perf")),
 
+  // Performance mode's own budget. A percentile means nothing on one sample per
+  // endpoint, so the performance run is graded on a flat per-endpoint ceiling
+  // instead: is any single endpoint slow when nothing else is happening?
+  maxEndpointMs: Number(flag("max-endpoint-ms", 1000)),
+
   // Stress mode: --stages 10,25,50,100 walks up through those user counts,
   // measuring each separately. One number tells you whether it coped at that
   // level; a set of them tells you where it stops coping, which is the question
@@ -482,8 +487,34 @@ async function main() {
     return;
   }
 
+  // Performance mode ends here: one request per endpoint, graded against a flat
+  // per-endpoint budget. Written to its own file so a performance run never
+  // overwrites a load run's numbers.
+  const slowest = [...baseline].sort((a, b) => b.ms - a.ms)[0];
+  const overBudget = baseline.filter((entry) => entry.ms > CONFIG.maxEndpointMs);
+  const notOk = baseline.filter((entry) => !entry.ok);
+
+  console.log(`\n  slowest     ${slowest.endpoint} at ${slowest.ms}ms`);
+  console.log(`  budget      ${CONFIG.maxEndpointMs}ms per endpoint`);
+
+  report.slowest = { endpoint: slowest.endpoint, ms: slowest.ms };
+  report.breaches = [
+    ...overBudget.map((entry) => `${entry.endpoint} took ${entry.ms}ms, over the ${CONFIG.maxEndpointMs}ms budget`),
+    ...notOk.map((entry) => `${entry.endpoint} answered ${entry.status}`),
+  ];
+
   fs.mkdirSync(path.resolve(CONFIG.outDir), { recursive: true });
-  fs.writeFileSync(path.join(path.resolve(CONFIG.outDir), "api-load.json"), JSON.stringify(report, null, 2));
+  const outFile = path.join(path.resolve(CONFIG.outDir), "api-performance.json");
+  fs.writeFileSync(outFile, JSON.stringify(report, null, 2));
+  console.log(`\n  report      ${outFile}`);
+
+  if (report.breaches.length) {
+    console.log(`\n  THRESHOLD BREACHED`);
+    report.breaches.forEach((breach) => console.log(`    - ${breach}`));
+    process.exitCode = 1;
+    return;
+  }
+  console.log(`\n  every endpoint within budget`);
 }
 
 main().catch((error) => {

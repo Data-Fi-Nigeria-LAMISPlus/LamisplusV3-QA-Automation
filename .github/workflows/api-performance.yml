@@ -1,12 +1,15 @@
 name: API Performance
 
-# Load and performance test for the LAMISPlus API - scripts/api-load-test.mjs.
+# PERFORMANCE - how fast is each endpoint when nothing else is happening?
 #
-# Not run on every push: it puts sustained traffic on a shared environment, so it
-# runs to a schedule and on demand. The job fails when a threshold is breached,
-# which is what makes it a gate rather than a report nobody reads.
+# One request per endpoint, in sequence, no concurrency. Thirteen requests in
+# total, so it finishes in seconds and is safe to run often. It answers "has
+# anything got slower?" and fails when a single endpoint goes over its budget.
 #
-# Read-only endpoints only. Nothing here writes, so a run leaves no data behind.
+# For "how many users can it take", see api-load.yml - that is a different
+# question and a much heavier run.
+#
+# Read-only. Nothing here creates or changes data.
 on:
   workflow_dispatch:
     inputs:
@@ -15,33 +18,15 @@ on:
         required: true
         default: qa
         type: choice
-        options:
-          - dev
-          - qa
-          - prod
-      vus:
-        description: "Virtual users (ignored when stages is set)"
+        options: [dev, qa, prod]
+      max_endpoint_ms:
+        description: "Fail if any endpoint takes longer than this (milliseconds)"
         required: false
-        default: "10"
-      duration:
-        description: "Seconds of sustained load (after the ramp)"
-        required: false
-        default: "60"
-      stages:
-        description: "Stress mode - walk up through user counts, e.g. 10,25,50,100"
-        required: false
-        default: ""
-      stage_duration:
-        description: "Seconds per stage in stress mode"
-        required: false
-        default: "30"
-      p95:
-        description: "Fail if p95 latency exceeds this many milliseconds"
-        required: false
-        default: "1500"
+        default: "1000"
   schedule:
-    # Weekly, Sunday 04:00 UTC - after the nightly functional runs, before the week.
-    - cron: '0 4 * * 0'
+    # Nightly at 02:30 UTC, half an hour before the functional suites, so a
+    # slowdown is visible before the long runs start.
+    - cron: '30 2 * * *'
 
 env:
   CI: true
@@ -50,7 +35,7 @@ env:
   PROD_BASE_URL: ${{ secrets.PROD_BASE_URL }}
 
 jobs:
-  load-test:
+  performance:
     runs-on: ubuntu-latest
 
     env:
@@ -68,71 +53,39 @@ jobs:
 
       - run: npm ci
 
-      # The script reads QA_BASE_URL / DEV_BASE_URL / PROD_BASE_URL, so point the
-      # one it uses at whichever environment was chosen.
-      - name: Run load and performance test
-        id: load
+      - name: Measure endpoint latency
         run: |
           case "${TARGET_ENV}" in
             dev)  export QA_BASE_URL="${DEV_BASE_URL}" ;;
             prod) export QA_BASE_URL="${PROD_BASE_URL}" ;;
           esac
-          # Stress mode when stages were given, otherwise a single sustained level.
-          if [ -n "${{ github.event.inputs.stages }}" ]; then
-            npm run perf:api -- \
-              --stages "${{ github.event.inputs.stages }}" \
-              --stage-duration "${{ github.event.inputs.stage_duration || '30' }}" \
-              --p95 "${{ github.event.inputs.p95 || '1500' }}"
-          else
-            npm run perf:api -- \
-              --vus "${{ github.event.inputs.vus || '10' }}" \
-              --duration "${{ github.event.inputs.duration || '60' }}" \
-              --p95 "${{ github.event.inputs.p95 || '1500' }}"
-          fi
+          npm run perf:api -- --max-endpoint-ms "${{ github.event.inputs.max_endpoint_ms || '1000' }}"
 
       - name: Summarise
         if: always()
         run: |
-          report=cypress/reports/perf/api-load.json
+          report=cypress/reports/perf/api-performance.json
           [ -f "$report" ] || { echo "No performance report produced."; exit 0; }
           node -e '
-            const r = require("./cypress/reports/perf/api-load.json");
+            const r = require("./cypress/reports/perf/api-performance.json");
             const line = (s) => console.log(s);
             line("## API performance");
             line("");
-            line(`Target **${r.target}**`);
+            line("**What this measures.** One request to each endpoint, one after another, with no other traffic. It answers *how fast is this endpoint at rest*, and flags any that have got slow. It does not test how the system copes with many users at once - that is the API Load workflow.");
             line("");
-
-            if (r.stages) {
-              line("Throttled means the API refused the request with 429 - it answered correctly under pressure. Failed means it did not.");
-              line("");
-              line("| Users | Requests | req/s | p50 | p95 | p99 | Throttled | Failed |");
-              line("| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |");
-              r.stages.forEach((s) => line(`| ${s.users} | ${s.requests} | ${s.throughput} | ${s.p50} ms | ${s.p95} ms | ${s.p99} ms | ${s.throttleRate}% | ${s.errorRate}% |`));
-              line("");
-              if (r.highestHealthy) line(`Served in full up to **${r.highestHealthy.users} users** at ${r.highestHealthy.throughput} req/s (p95 ${r.highestHealthy.p95} ms).`);
-              if (r.plateaued) line(`Throughput peaked at ${r.throughputPeak.users} users - above that the runner may be the limit, not the API.`);
-            } else {
-              const o = r.overall || {};
-              line(`${r.config.vus} virtual users · ${r.config.duration}s sustained`);
-              line("");
-              line("| Metric | Value |");
-              line("| --- | --- |");
-              line(`| Requests | ${o.count ?? 0} in ${o.wallSeconds ?? 0}s (${o.throughputPerSecond ?? 0}/s) |`);
-              line(`| Median | ${Math.round(o.p50 ?? 0)} ms |`);
-              line(`| 95th percentile | ${Math.round(o.p95 ?? 0)} ms |`);
-              line(`| 99th percentile | ${Math.round(o.p99 ?? 0)} ms |`);
-              line(`| Slowest | ${Math.round(o.max ?? 0)} ms |`);
-              line(`| Throttled (429) | ${r.throttleRate ?? 0}% |`);
-              line(`| Failed | ${r.errorRate ?? 0}% |`);
-            }
-
+            line(`Target **${r.target}** · budget ${r.config.maxEndpointMs} ms per endpoint`);
+            line("");
+            line("| Endpoint | Status | Time |");
+            line("| --- | ---: | ---: |");
+            r.baseline.forEach((b) => line(`| ${b.endpoint} | ${b.status} | ${b.ms} ms |`));
+            line("");
+            line(`Slowest: **${r.slowest.endpoint}** at ${r.slowest.ms} ms.`);
             line("");
             if ((r.breaches || []).length) {
-              line("**Thresholds breached**");
+              line("**Over budget**");
               r.breaches.forEach((b) => line(`- ${b}`));
             } else {
-              line("All thresholds met.");
+              line("Every endpoint within budget.");
             }
           ' >> "$GITHUB_STEP_SUMMARY"
 
@@ -141,5 +94,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: api-performance-report
-          path: cypress/reports/perf/api-load.json
+          path: cypress/reports/perf/api-performance.json
           if-no-files-found: warn

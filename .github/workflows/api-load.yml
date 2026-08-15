@@ -1,0 +1,148 @@
+name: API Load
+
+# LOAD - does the API hold up when many people use it at once?
+#
+# Virtual users loop over the read endpoints for a set time, and the run reports
+# throughput, the slow tail (p95/p99), how many requests were rate limited and
+# how many actually failed.
+#
+# Two shapes:
+#   sustained  one level held for a while - "does it cope at N users?"
+#   stress     a walk up through levels - "at what point does it stop coping?"
+#              set the stages input, e.g. 10,25,50,100
+#
+# Not on push: this puts real traffic on a shared environment for minutes at a
+# time. Weekly, or on demand when something is about to change.
+#
+# For "how fast is one request", see api-performance.yml - that runs in seconds.
+#
+# Read-only. Nothing here creates or changes data, so a run leaves nothing behind.
+on:
+  workflow_dispatch:
+    inputs:
+      target_env:
+        description: "Target environment: dev, qa, or prod"
+        required: true
+        default: qa
+        type: choice
+        options: [dev, qa, prod]
+      vus:
+        description: "Virtual users, for a sustained run (ignored when stages is set)"
+        required: false
+        default: "10"
+      duration:
+        description: "Seconds of sustained load, after the ramp"
+        required: false
+        default: "60"
+      stages:
+        description: "Stress mode - walk up through user counts, e.g. 10,25,50,100"
+        required: false
+        default: ""
+      stage_duration:
+        description: "Seconds per stage in stress mode"
+        required: false
+        default: "30"
+      p95:
+        description: "Fail if the 95th percentile exceeds this (milliseconds)"
+        required: false
+        default: "1500"
+  schedule:
+    # Weekly, Sunday 04:00 UTC - quiet time, and after the nightly suites.
+    - cron: '0 4 * * 0'
+
+env:
+  CI: true
+  DEV_BASE_URL: ${{ secrets.DEV_BASE_URL }}
+  QA_BASE_URL: ${{ secrets.QA_BASE_URL }}
+  PROD_BASE_URL: ${{ secrets.PROD_BASE_URL }}
+
+jobs:
+  load:
+    runs-on: ubuntu-latest
+
+    env:
+      EMAIL: ${{ secrets.EMAIL }}
+      PASSWORD: ${{ secrets.PASSWORD }}
+      TARGET_ENV: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.target_env || 'qa' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20.19.0
+          cache: npm
+
+      - run: npm ci
+
+      - name: Run load test
+        run: |
+          case "${TARGET_ENV}" in
+            dev)  export QA_BASE_URL="${DEV_BASE_URL}" ;;
+            prod) export QA_BASE_URL="${PROD_BASE_URL}" ;;
+          esac
+          if [ -n "${{ github.event.inputs.stages }}" ]; then
+            npm run load:api -- \
+              --stages "${{ github.event.inputs.stages }}" \
+              --stage-duration "${{ github.event.inputs.stage_duration || '30' }}" \
+              --p95 "${{ github.event.inputs.p95 || '1500' }}"
+          else
+            npm run load:api -- \
+              --vus "${{ github.event.inputs.vus || '10' }}" \
+              --duration "${{ github.event.inputs.duration || '60' }}" \
+              --p95 "${{ github.event.inputs.p95 || '1500' }}"
+          fi
+
+      - name: Summarise
+        if: always()
+        run: |
+          report=cypress/reports/perf/api-load.json
+          [ -f "$report" ] || { echo "No load report produced."; exit 0; }
+          node -e '
+            const r = require("./cypress/reports/perf/api-load.json");
+            const line = (s) => console.log(s);
+            line("## API load");
+            line("");
+            line("**What this measures.** Several simulated users calling the API at the same time, for a set period. It answers *does the system hold up when a clinic is busy*. Throttled means the API refused a request with 429 to protect itself - it answered correctly under pressure. Failed means it did not answer at all.");
+            line("");
+            line(`Target **${r.target}**`);
+            line("");
+
+            if (r.stages) {
+              line("| Users | Requests | req/s | p50 | p95 | p99 | Throttled | Failed |");
+              line("| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |");
+              r.stages.forEach((s) => line(`| ${s.users} | ${s.requests} | ${s.throughput} | ${s.p50} ms | ${s.p95} ms | ${s.p99} ms | ${s.throttleRate}% | ${s.errorRate}% |`));
+              line("");
+              if (r.highestHealthy) line(`Served every request up to **${r.highestHealthy.users} users** at ${r.highestHealthy.throughput} req/s (p95 ${r.highestHealthy.p95} ms).`);
+              if (r.plateaued) line(`Throughput peaked at ${r.throughputPeak.users} users - above that the runner may be the limit rather than the API.`);
+            } else {
+              const o = r.overall || {};
+              line(`${r.config.vus} virtual users · ${r.config.duration}s sustained`);
+              line("");
+              line("| Metric | Value |");
+              line("| --- | --- |");
+              line(`| Requests | ${o.count ?? 0} in ${o.wallSeconds ?? 0}s (${o.throughputPerSecond ?? 0}/s) |`);
+              line(`| Median | ${Math.round(o.p50 ?? 0)} ms |`);
+              line(`| 95th percentile | ${Math.round(o.p95 ?? 0)} ms |`);
+              line(`| 99th percentile | ${Math.round(o.p99 ?? 0)} ms |`);
+              line(`| Slowest | ${Math.round(o.max ?? 0)} ms |`);
+              line(`| Throttled (429) | ${r.throttleRate ?? 0}% |`);
+              line(`| Failed | ${r.errorRate ?? 0}% |`);
+            }
+
+            line("");
+            if ((r.breaches || []).length) {
+              line("**Thresholds breached**");
+              r.breaches.forEach((b) => line(`- ${b}`));
+            } else {
+              line("All thresholds met.");
+            }
+          ' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload load report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-load-report
+          path: cypress/reports/perf/api-load.json
+          if-no-files-found: warn

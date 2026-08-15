@@ -168,6 +168,35 @@ function explain(message) {
 
 const SEVERITY_ORDER = { product: 0, data: 1, glitch: 2 };
 
+// What the run this report came from actually does, in plain words.
+//
+// Readers get the report without the workflow file, so "UI Tests ran" means
+// nothing on its own - this says what was exercised, when it runs and what a
+// pass is worth. Keyed by the label the report is built with.
+const ABOUT = {
+  UI: {
+    workflow: ".github/workflows/cypress-ui.yml",
+    runs: "Every push to master, every night at 03:00 UTC, and on demand.",
+    what: [
+      "A robot signs in and drives the application in a real browser: it opens every screen in the sidebar, works through the patient journey from registration to consultation, and fills in the clinical forms across HIV, TB, immunization, family planning, pharmacy, laboratory and inpatient care.",
+      "It types into the forms the same way a member of staff would, saves them, and checks what the screen does next.",
+    ],
+    caveat:
+      "Most of these forms do not store anything yet - their save button is not connected to the server. For those, a pass means the screen works and every field can be filled in, not that the data was kept. Immunization, viral hepatitis, pharmacy, family planning and the inpatient screens do save, and those are checked properly.",
+  },
+  API: {
+    workflow: ".github/workflows/cypress-api.yml",
+    runs: "Every push to master, every night at 03:00 UTC, and on demand.",
+    what: [
+      "This one skips the screens entirely and talks to the server directly, the way the application does behind the scenes.",
+      "It signs in, then asks the server for the things the app needs - the patient register, the wards and beds, the drug and laboratory catalogues, users and permissions - and checks each answer comes back correctly and in the shape the app expects.",
+      "It also checks the server turns away requests it should: no sign-in, a forged sign-in, or a user reaching for something outside their facility.",
+    ],
+    caveat:
+      "Read-only. Nothing here creates or changes patient data, so it is safe to run against a live environment at any time.",
+  },
+};
+
 const formatDuration = (ms) => {
   const total = Math.round((Number(ms) || 0) / 1000);
   const minutes = Math.floor(total / 60);
@@ -324,6 +353,8 @@ function buildHtml({ label, stats, specs, failures, env, generatedAt }) {
   .card.pass .n { color: #157347; } .card.fail .n { color: #b42318; }
   .intro { background: #f4f7fb; border: 1px solid #dbe3ee; border-radius: 3px; padding: 12px 14px; margin-top: 16px; }
   .intro p { margin: 0 0 7px; } .intro p:last-child { margin: 0; }
+  .about-meta { font-size: 9pt; color: #5b6a7f; border-top: 1px solid #dbe3ee; padding-top: 7px; }
+  .about-meta code { font-family: ui-monospace, Consolas, monospace; font-size: 8.5pt; }
   .verdict { font-size: 12pt; line-height: 1.5; margin: 16px 0 0; }
   .verdict strong { color: #16202e; }
   .failure { border: 1px solid #dbe3ee; border-left: 3px solid #94a3b8; border-radius: 3px;
@@ -363,11 +394,21 @@ function buildHtml({ label, stats, specs, failures, env, generatedAt }) {
   <p class="meta">${escapeHtml(generatedAt)} &nbsp;·&nbsp; took ${formatDuration(stats.duration)}</p>
 
   <div class="intro">
-    <p><strong>How to read this.</strong> A robot signs into LAMISPlus and works through the
-    system the way a member of staff would - opening screens, filling in forms and saving them.
-    Each thing it verifies is one <em>check</em>.</p>
-    <p>A check that passes means that part of the system behaved correctly. A check that does not
-    pass is listed below, in plain terms, with what it means and who should look at it.</p>
+    <p><strong>How to read this.</strong> ${(ABOUT[label]?.what ?? [
+      "An automated suite exercises the system and verifies what it does.",
+    ])
+      .map((paragraph) => escapeHtml(paragraph))
+      .join("</p>\n    <p>")}</p>
+    <p>Each thing it verifies is one <em>check</em>. A check that passes means that part of the
+    system behaved correctly. A check that does not pass is listed below, in plain terms, with what
+    it means and who should look at it.</p>
+    ${ABOUT[label]?.caveat ? `<p><strong>Worth knowing.</strong> ${escapeHtml(ABOUT[label].caveat)}</p>` : ""}
+    ${
+      ABOUT[label]
+        ? `<p class="about-meta"><strong>When it runs.</strong> ${escapeHtml(ABOUT[label].runs)}
+           &nbsp;·&nbsp; Defined in <code>${escapeHtml(ABOUT[label].workflow)}</code></p>`
+        : ""
+    }
   </div>
 
   <div class="cards">
