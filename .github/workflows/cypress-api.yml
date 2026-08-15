@@ -97,7 +97,7 @@ jobs:
           server_port: ${{ secrets.MAIL_PORT }}
           username: ${{ secrets.MAIL_USERNAME }}
           password: ${{ secrets.MAIL_PASSWORD }}
-          from: LAMISPlus QA <${{ secrets.MAIL_USERNAME }}>
+          from: LAMISPlus QA <${{ secrets.MAIL_FROM || secrets.MAIL_USERNAME }}>
           to: ${{ env.MAIL_TO }}
           cc: ${{ env.MAIL_CC }}
           subject: ${{ steps.email.outputs.subject }}
