@@ -32,11 +32,6 @@ jobs:
       EMAIL: ${{ secrets.EMAIL }}
       PASSWORD: ${{ secrets.PASSWORD }}
       TARGET_ENV: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.target_env || 'qa' }}
-      # Comma-separated for more than one recipient - see cypress-ui.yml.
-      MAIL_TO: ${{ secrets.REPORT_EMAIL_TO || vars.REPORT_EMAIL_TO || 'valentine.komulo@thepalladiumgroup.org' }}
-      MAIL_CC: ${{ secrets.REPORT_EMAIL_CC || vars.REPORT_EMAIL_CC }}
-      MAIL_SERVER: ${{ secrets.MAIL_SERVER }}
-      TEAMS_WEBHOOK: ${{ secrets.TEAMS_WEBHOOK }}
 
     steps:
       - uses: actions/checkout@v4
@@ -77,43 +72,3 @@ jobs:
           name: api-report-pdf
           path: cypress/reports/api/final/api-report.pdf
           if-no-files-found: warn
-
-      # Optional - see the note in cypress-ui.yml for the secrets this needs.
-      # Skipped entirely when MAIL_SERVER is unset.
-      - name: Build email summary
-        continue-on-error: true
-        if: always() && env.MAIL_SERVER != ''
-        id: email
-        run: |
-          subject=$(node scripts/report-email.js cypress/reports/api API)
-          echo "subject=$subject" >> "$GITHUB_OUTPUT"
-
-      - name: Email the report
-        continue-on-error: true
-        if: always() && env.MAIL_SERVER != ''
-        uses: dawidd6/action-send-mail@6063705cefe50cb915fc53bb5edffb3dc2feb3f7 # v3.12.0
-        with:
-          server_address: ${{ secrets.MAIL_SERVER }}
-          server_port: ${{ secrets.MAIL_PORT }}
-          username: ${{ secrets.MAIL_USERNAME }}
-          password: ${{ secrets.MAIL_PASSWORD }}
-          from: LAMISPlus QA <${{ secrets.MAIL_FROM || secrets.MAIL_USERNAME }}>
-          to: ${{ env.MAIL_TO }}
-          cc: ${{ env.MAIL_CC }}
-          subject: ${{ steps.email.outputs.subject }}
-          html_body: file://cypress/reports/api/final/email.html
-          attachments: cypress/reports/api/final/api-report.pdf
-          # 465 is implicit TLS, 587 upgrades with STARTTLS. Derived from the
-          # port so there is no second setting to keep in step.
-          secure: ${{ secrets.MAIL_PORT == '465' }}
-          ignore_cert: false
-
-      # Teams, as an alternative or an addition to email - see cypress-ui.yml.
-      - name: Notify Teams
-        continue-on-error: true
-        if: always() && env.TEAMS_WEBHOOK != ''
-        run: |
-          node scripts/report-teams.js cypress/reports/api API
-          curl -sS -X POST -H 'Content-Type: application/json' \
-            --data @cypress/reports/api/final/teams-card.json \
-            "$TEAMS_WEBHOOK" -o /dev/null -w 'Teams responded %{http_code}\n'

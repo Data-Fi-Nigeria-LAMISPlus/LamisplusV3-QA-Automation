@@ -37,18 +37,6 @@ jobs:
       EMAIL: ${{ secrets.EMAIL }}
       PASSWORD: ${{ secrets.PASSWORD }}
       TARGET_ENV: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.target_env || 'qa' }}
-      # Emailing the report is optional. Lifted into env so the step can check
-      # whether it is configured - secrets cannot be read in an `if` directly.
-      # Recipients: a comma-separated list, so add the rest of the team to
-      # REPORT_EMAIL_TO rather than editing this file -
-      #   "someone@example.org,someone.else@example.org"
-      # REPORT_EMAIL_CC is optional and works the same way. The committed
-      # fallback is a convenience; move it to a repository variable if this repo
-      # is ever public, so the address is not scraped.
-      MAIL_TO: ${{ secrets.REPORT_EMAIL_TO || vars.REPORT_EMAIL_TO || 'valentine.komulo@thepalladiumgroup.org' }}
-      MAIL_CC: ${{ secrets.REPORT_EMAIL_CC || vars.REPORT_EMAIL_CC }}
-      MAIL_SERVER: ${{ secrets.MAIL_SERVER }}
-      TEAMS_WEBHOOK: ${{ secrets.TEAMS_WEBHOOK }}
 
     steps:
       - uses: actions/checkout@v4
@@ -93,59 +81,3 @@ jobs:
           name: ui-report-pdf
           path: cypress/reports/ui/final/ui-report.pdf
           if-no-files-found: warn
-
-      # ── Emailing the report ──────────────────────────────────────────────
-      #
-      # Optional, and skipped entirely unless MAIL_SERVER is set, so an
-      # unconfigured repository is unaffected. Needs these repository secrets:
-      #
-      #   MAIL_SERVER    smtp host, e.g. smtp.office365.com or smtp-relay.brevo.com
-      #   MAIL_PORT      587 for STARTTLS, 465 for SSL
-      #   MAIL_USERNAME  the mailbox or API user sending it
-      #   MAIL_PASSWORD  an app password or API key, never a normal password
-      #
-      # and optionally REPORT_EMAIL_TO to override the recipient below.
-      - name: Build email summary
-        continue-on-error: true
-        if: always() && env.MAIL_SERVER != ''
-        id: email
-        run: |
-          subject=$(node scripts/report-email.js cypress/reports/ui UI)
-          echo "subject=$subject" >> "$GITHUB_OUTPUT"
-
-      - name: Email the report
-        continue-on-error: true
-        if: always() && env.MAIL_SERVER != ''
-        uses: dawidd6/action-send-mail@6063705cefe50cb915fc53bb5edffb3dc2feb3f7 # v3.12.0
-        with:
-          server_address: ${{ secrets.MAIL_SERVER }}
-          server_port: ${{ secrets.MAIL_PORT }}
-          username: ${{ secrets.MAIL_USERNAME }}
-          password: ${{ secrets.MAIL_PASSWORD }}
-          from: LAMISPlus QA <${{ secrets.MAIL_FROM || secrets.MAIL_USERNAME }}>
-          to: ${{ env.MAIL_TO }}
-          cc: ${{ env.MAIL_CC }}
-          subject: ${{ steps.email.outputs.subject }}
-          html_body: file://cypress/reports/ui/final/email.html
-          attachments: cypress/reports/ui/final/ui-report.pdf
-          # 465 is implicit TLS, 587 upgrades with STARTTLS. Derived from the
-          # port so there is no second setting to keep in step.
-          secure: ${{ secrets.MAIL_PORT == '465' }}
-          ignore_cert: false
-
-      # Teams, as an alternative or an addition to email. Skipped unless
-      # TEAMS_WEBHOOK is set.
-      #
-      # Create the webhook in Teams: the channel's ... menu > Workflows > "Post to
-      # a channel when a webhook request is received". The older Office 365
-      # "Incoming Webhook" connector has been retired by Microsoft, so a URL
-      # created today comes from Workflows and takes an Adaptive Card, which is
-      # what scripts/report-teams.js builds.
-      - name: Notify Teams
-        continue-on-error: true
-        if: always() && env.TEAMS_WEBHOOK != ''
-        run: |
-          node scripts/report-teams.js cypress/reports/ui UI
-          curl -sS -X POST -H 'Content-Type: application/json' \
-            --data @cypress/reports/ui/final/teams-card.json \
-            "$TEAMS_WEBHOOK" -o /dev/null -w 'Teams responded %{http_code}\n'
