@@ -51,7 +51,14 @@ const CONFIG = {
   // Performance mode's own budget. A percentile means nothing on one sample per
   // endpoint, so the performance run is graded on a flat per-endpoint ceiling
   // instead: is any single endpoint slow when nothing else is happening?
-  maxEndpointMs: Number(flag("max-endpoint-ms", 1000)),
+  //
+  // 2500ms rather than something tighter because the same endpoint measures very
+  // differently depending on where the test runs. From a machine on the same
+  // network the register answers in ~115ms; from a GitHub runner it is ~280ms,
+  // and the slowest endpoint scales with it. A budget tuned to a laptop fails
+  // every CI run for reasons that have nothing to do with the API. Tighten it
+  // per environment with --max-endpoint-ms.
+  maxEndpointMs: Number(flag("max-endpoint-ms", 2500)),
 
   // Stress mode: --stages 10,25,50,100 walks up through those user counts,
   // measuring each separately. One number tells you whether it coped at that

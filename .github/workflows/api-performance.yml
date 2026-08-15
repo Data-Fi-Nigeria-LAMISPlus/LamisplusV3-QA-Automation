@@ -22,7 +22,7 @@ on:
       max_endpoint_ms:
         description: "Fail if any endpoint takes longer than this (milliseconds)"
         required: false
-        default: "1000"
+        default: "2500"
   schedule:
     # Nightly at 02:30 UTC, half an hour before the functional suites, so a
     # slowdown is visible before the long runs start.
@@ -59,7 +59,7 @@ jobs:
             dev)  export QA_BASE_URL="${DEV_BASE_URL}" ;;
             prod) export QA_BASE_URL="${PROD_BASE_URL}" ;;
           esac
-          npm run perf:api -- --max-endpoint-ms "${{ github.event.inputs.max_endpoint_ms || '1000' }}"
+          npm run perf:api -- --max-endpoint-ms "${{ github.event.inputs.max_endpoint_ms || '2500' }}"
 
       - name: Summarise
         if: always()
@@ -80,6 +80,8 @@ jobs:
             r.baseline.forEach((b) => line(`| ${b.endpoint} | ${b.status} | ${b.ms} ms |`));
             line("");
             line(`Slowest: **${r.slowest.endpoint}** at ${r.slowest.ms} ms.`);
+            line("");
+            line("_Measured from a GitHub runner, so every figure includes the network hop out to the server - expect these to be two to three times what the same endpoint shows from a machine beside it. Compare runs against each other, not against a local measurement._");
             line("");
             if ((r.breaches || []).length) {
               line("**Over budget**");
