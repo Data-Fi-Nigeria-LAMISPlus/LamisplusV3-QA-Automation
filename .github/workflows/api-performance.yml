@@ -20,13 +20,21 @@ on:
           - qa
           - prod
       vus:
-        description: "Virtual users"
+        description: "Virtual users (ignored when stages is set)"
         required: false
         default: "10"
       duration:
         description: "Seconds of sustained load (after the ramp)"
         required: false
         default: "60"
+      stages:
+        description: "Stress mode - walk up through user counts, e.g. 10,25,50,100"
+        required: false
+        default: ""
+      stage_duration:
+        description: "Seconds per stage in stress mode"
+        required: false
+        default: "30"
       p95:
         description: "Fail if p95 latency exceeds this many milliseconds"
         required: false
@@ -69,10 +77,18 @@ jobs:
             dev)  export QA_BASE_URL="${DEV_BASE_URL}" ;;
             prod) export QA_BASE_URL="${PROD_BASE_URL}" ;;
           esac
-          npm run perf:api -- \
-            --vus "${{ github.event.inputs.vus || '10' }}" \
-            --duration "${{ github.event.inputs.duration || '60' }}" \
-            --p95 "${{ github.event.inputs.p95 || '1500' }}"
+          # Stress mode when stages were given, otherwise a single sustained level.
+          if [ -n "${{ github.event.inputs.stages }}" ]; then
+            npm run perf:api -- \
+              --stages "${{ github.event.inputs.stages }}" \
+              --stage-duration "${{ github.event.inputs.stage_duration || '30' }}" \
+              --p95 "${{ github.event.inputs.p95 || '1500' }}"
+          else
+            npm run perf:api -- \
+              --vus "${{ github.event.inputs.vus || '10' }}" \
+              --duration "${{ github.event.inputs.duration || '60' }}" \
+              --p95 "${{ github.event.inputs.p95 || '1500' }}"
+          fi
 
       - name: Summarise
         if: always()
@@ -81,20 +97,36 @@ jobs:
           [ -f "$report" ] || { echo "No performance report produced."; exit 0; }
           node -e '
             const r = require("./cypress/reports/perf/api-load.json");
-            const o = r.overall || {};
             const line = (s) => console.log(s);
             line("## API performance");
             line("");
-            line(`Target **${r.target}** · ${r.config.vus} virtual users · ${r.config.duration}s sustained`);
+            line(`Target **${r.target}**`);
             line("");
-            line("| Metric | Value |");
-            line("| --- | --- |");
-            line(`| Requests | ${o.count ?? 0} in ${o.wallSeconds ?? 0}s (${o.throughputPerSecond ?? 0}/s) |`);
-            line(`| Median | ${Math.round(o.p50 ?? 0)} ms |`);
-            line(`| 95th percentile | ${Math.round(o.p95 ?? 0)} ms |`);
-            line(`| 99th percentile | ${Math.round(o.p99 ?? 0)} ms |`);
-            line(`| Slowest | ${Math.round(o.max ?? 0)} ms |`);
-            line(`| Error rate | ${r.errorRate ?? 0}% |`);
+
+            if (r.stages) {
+              line("Throttled means the API refused the request with 429 - it answered correctly under pressure. Failed means it did not.");
+              line("");
+              line("| Users | Requests | req/s | p50 | p95 | p99 | Throttled | Failed |");
+              line("| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |");
+              r.stages.forEach((s) => line(`| ${s.users} | ${s.requests} | ${s.throughput} | ${s.p50} ms | ${s.p95} ms | ${s.p99} ms | ${s.throttleRate}% | ${s.errorRate}% |`));
+              line("");
+              if (r.highestHealthy) line(`Served in full up to **${r.highestHealthy.users} users** at ${r.highestHealthy.throughput} req/s (p95 ${r.highestHealthy.p95} ms).`);
+              if (r.plateaued) line(`Throughput peaked at ${r.throughputPeak.users} users - above that the runner may be the limit, not the API.`);
+            } else {
+              const o = r.overall || {};
+              line(`${r.config.vus} virtual users · ${r.config.duration}s sustained`);
+              line("");
+              line("| Metric | Value |");
+              line("| --- | --- |");
+              line(`| Requests | ${o.count ?? 0} in ${o.wallSeconds ?? 0}s (${o.throughputPerSecond ?? 0}/s) |`);
+              line(`| Median | ${Math.round(o.p50 ?? 0)} ms |`);
+              line(`| 95th percentile | ${Math.round(o.p95 ?? 0)} ms |`);
+              line(`| 99th percentile | ${Math.round(o.p99 ?? 0)} ms |`);
+              line(`| Slowest | ${Math.round(o.max ?? 0)} ms |`);
+              line(`| Throttled (429) | ${r.throttleRate ?? 0}% |`);
+              line(`| Failed | ${r.errorRate ?? 0}% |`);
+            }
+
             line("");
             if ((r.breaches || []).length) {
               line("**Thresholds breached**");
