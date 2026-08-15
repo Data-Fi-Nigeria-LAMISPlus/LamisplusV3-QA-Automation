@@ -37,6 +37,13 @@ jobs:
       EMAIL: ${{ secrets.EMAIL }}
       PASSWORD: ${{ secrets.PASSWORD }}
       TARGET_ENV: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.target_env || 'qa' }}
+      # Emailing the report is optional. Lifted into env so the step can check
+      # whether it is configured - secrets cannot be read in an `if` directly.
+      # Override the recipient with a REPORT_EMAIL_TO secret or variable. The
+      # fallback is committed for convenience - move it to a repository variable
+      # if this repo is ever public, so the address is not scraped.
+      MAIL_TO: ${{ secrets.REPORT_EMAIL_TO || vars.REPORT_EMAIL_TO || 'valentine.komulo@thepalladiumgroup.org' }}
+      MAIL_SERVER: ${{ secrets.MAIL_SERVER }}
 
     steps:
       - uses: actions/checkout@v4
@@ -81,3 +88,36 @@ jobs:
           name: ui-report-pdf
           path: cypress/reports/ui/final/ui-report.pdf
           if-no-files-found: warn
+
+      # ── Emailing the report ──────────────────────────────────────────────
+      #
+      # Optional, and skipped entirely unless MAIL_SERVER is set, so an
+      # unconfigured repository is unaffected. Needs these repository secrets:
+      #
+      #   MAIL_SERVER    smtp host, e.g. smtp.office365.com or smtp-relay.brevo.com
+      #   MAIL_PORT      587 for STARTTLS, 465 for SSL
+      #   MAIL_USERNAME  the mailbox or API user sending it
+      #   MAIL_PASSWORD  an app password or API key, never a normal password
+      #
+      # and optionally REPORT_EMAIL_TO to override the recipient below.
+      - name: Build email summary
+        if: always() && env.MAIL_SERVER != ''
+        id: email
+        run: |
+          subject=$(node scripts/report-email.js cypress/reports/ui UI)
+          echo "subject=$subject" >> "$GITHUB_OUTPUT"
+
+      - name: Email the report
+        if: always() && env.MAIL_SERVER != ''
+        uses: dawidd6/action-send-mail@6063705cefe50cb915fc53bb5edffb3dc2feb3f7 # v3.12.0
+        with:
+          server_address: ${{ secrets.MAIL_SERVER }}
+          server_port: ${{ secrets.MAIL_PORT }}
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          from: LAMISPlus QA <${{ secrets.MAIL_USERNAME }}>
+          to: ${{ env.MAIL_TO }}
+          subject: ${{ steps.email.outputs.subject }}
+          html_body: file://cypress/reports/ui/final/email.html
+          attachments: cypress/reports/ui/final/ui-report.pdf
+          ignore_cert: false

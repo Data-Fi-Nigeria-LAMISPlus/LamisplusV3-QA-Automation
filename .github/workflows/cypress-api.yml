@@ -32,6 +32,8 @@ jobs:
       EMAIL: ${{ secrets.EMAIL }}
       PASSWORD: ${{ secrets.PASSWORD }}
       TARGET_ENV: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.target_env || 'qa' }}
+      MAIL_TO: ${{ secrets.REPORT_EMAIL_TO || vars.REPORT_EMAIL_TO || 'valentine.komulo@thepalladiumgroup.org' }}
+      MAIL_SERVER: ${{ secrets.MAIL_SERVER }}
 
     steps:
       - uses: actions/checkout@v4
@@ -72,3 +74,27 @@ jobs:
           name: api-report-pdf
           path: cypress/reports/api/final/api-report.pdf
           if-no-files-found: warn
+
+      # Optional - see the note in cypress-ui.yml for the secrets this needs.
+      # Skipped entirely when MAIL_SERVER is unset.
+      - name: Build email summary
+        if: always() && env.MAIL_SERVER != ''
+        id: email
+        run: |
+          subject=$(node scripts/report-email.js cypress/reports/api API)
+          echo "subject=$subject" >> "$GITHUB_OUTPUT"
+
+      - name: Email the report
+        if: always() && env.MAIL_SERVER != ''
+        uses: dawidd6/action-send-mail@6063705cefe50cb915fc53bb5edffb3dc2feb3f7 # v3.12.0
+        with:
+          server_address: ${{ secrets.MAIL_SERVER }}
+          server_port: ${{ secrets.MAIL_PORT }}
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          from: LAMISPlus QA <${{ secrets.MAIL_USERNAME }}>
+          to: ${{ env.MAIL_TO }}
+          subject: ${{ steps.email.outputs.subject }}
+          html_body: file://cypress/reports/api/final/email.html
+          attachments: cypress/reports/api/final/api-report.pdf
+          ignore_cert: false
