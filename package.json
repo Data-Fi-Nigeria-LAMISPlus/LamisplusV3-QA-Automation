@@ -7,7 +7,9 @@
   "clean:ui": "node -e \"require('fs').rmSync('cypress/reports/ui',{recursive:true,force:true})\"",
   "clean:api": "node -e \"require('fs').rmSync('cypress/reports/api',{recursive:true,force:true})\"",
   "precy:ui": "npm run clean:ui",
-  "cy:ui": "cypress run --config-file ui.config.js --spec \"cypress/e2e/ui/smoke/**/*.cy.js,cypress/e2e/ui/clinical/**/*.cy.js\"",
+  "cy:ui": "cypress run --config-file ui.config.js --spec \"cypress/e2e/ui/smoke/**/*.cy.js,cypress/e2e/ui/clinical/**/*.cy.js,cypress/e2e/ui/modules/**/*.cy.js\"",
+  "cy:ui:modules": "cypress run --config-file ui.config.js --spec \"cypress/e2e/ui/modules/**/*.cy.js\"",
+  "cy:ui:slow": "cypress run --config-file ui.config.js --env slowMo=600",
   "cy:ui:dev": "npm run cy:ui -- --env env=dev",
   "cy:ui:qa": "npm run cy:ui -- --env env=qa",
   "cy:ui:prod": "npm run cy:ui -- --env env=prod",
@@ -27,7 +29,8 @@
   "cy:api:dev": "npm run cy:api -- --env env=dev",
   "cy:api:qa": "npm run cy:api -- --env env=qa",
   "cy:api:prod": "npm run cy:api -- --env env=prod",
-  "report:ui": "node scripts/merge-reports.js cypress/reports/ui ui-report",
+  "report:ui": "node scripts/merge-reports.js cypress/reports/ui ui-report && npm run report:ui:pdf",
+  "report:ui:pdf": "node scripts/report-to-pdf.js cypress/reports/ui UI ui-report",
   "report:api": "node scripts/merge-reports.js cypress/reports/api api-report"
  },
  "dependencies": {
@@ -37,6 +40,7 @@
  "devDependencies": {
   "mochawesome": "^7.1.4",
   "mochawesome-merge": "^5.1.1",
-  "mochawesome-report-generator": "^6.3.2"
+  "mochawesome-report-generator": "^6.3.2",
+  "puppeteer-core": "^25.7.0"
  }
 }
