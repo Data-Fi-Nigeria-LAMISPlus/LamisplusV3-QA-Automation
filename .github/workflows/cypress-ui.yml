@@ -1,9 +1,11 @@
 name: UI Tests
 
-# Everything under cypress/e2e/ui/smoke and cypress/e2e/ui/clinical — i.e. all UI
-# specs except the OPD consultation one, which has its own workflow
-# (opd-consultation.yml). smoke/ is login + registration surface; clinical/ is the
-# longer patient-journey flows (check-in, triage, vitals, posting on).
+# Everything under cypress/e2e/ui/{smoke,clinical,modules} — i.e. all UI specs
+# except the OPD consultation one, which has its own workflow
+# (opd-consultation.yml).
+#   smoke/    login + registration surface
+#   clinical/ the longer patient-journey flows (check-in, triage, vitals, posting on)
+#   modules/  per-area coverage: every sidebar destination, worklist, hub and form
 on:
   push:
     branches: [master, main]
@@ -51,6 +53,9 @@ jobs:
         id: run_ui_tests
         run: npm run cy:ui:${{ env.TARGET_ENV }}
 
+      # Merges the per-spec JSON, renders the HTML report, then prints the PDF.
+      # The PDF is built from the merged JSON so it carries the failure reason for
+      # every failed test - see scripts/report-to-pdf.js.
       - name: Generate UI Report
         if: always()
         run: npm run report:ui
@@ -59,9 +64,20 @@ jobs:
         if: always()
         run: node scripts/ci-test-summary.js cypress/reports/ui "UI" "${{ steps.run_ui_tests.outcome }}"
 
+      # The whole folder: merged.json, the interactive HTML and the PDF.
       - name: Upload UI Report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: ui-report
           path: cypress/reports/ui/final
+
+      # The PDF on its own as well, so it can be downloaded from the run summary
+      # in one click without unpacking the full report.
+      - name: Upload UI Report PDF
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-report-pdf
+          path: cypress/reports/ui/final/ui-report.pdf
+          if-no-files-found: warn
