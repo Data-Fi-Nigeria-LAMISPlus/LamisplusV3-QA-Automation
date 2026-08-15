@@ -128,6 +128,9 @@ jobs:
           subject: ${{ steps.email.outputs.subject }}
           html_body: file://cypress/reports/ui/final/email.html
           attachments: cypress/reports/ui/final/ui-report.pdf
+          # 465 is implicit TLS, 587 upgrades with STARTTLS. Derived from the
+          # port so there is no second setting to keep in step.
+          secure: ${{ secrets.MAIL_PORT == '465' }}
           ignore_cert: false
 
       # Teams, as an alternative or an addition to email. Skipped unless
