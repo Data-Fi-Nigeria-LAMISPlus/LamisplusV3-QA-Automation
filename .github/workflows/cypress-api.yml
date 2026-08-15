@@ -32,8 +32,11 @@ jobs:
       EMAIL: ${{ secrets.EMAIL }}
       PASSWORD: ${{ secrets.PASSWORD }}
       TARGET_ENV: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.target_env || 'qa' }}
+      # Comma-separated for more than one recipient - see cypress-ui.yml.
       MAIL_TO: ${{ secrets.REPORT_EMAIL_TO || vars.REPORT_EMAIL_TO || 'valentine.komulo@thepalladiumgroup.org' }}
+      MAIL_CC: ${{ secrets.REPORT_EMAIL_CC || vars.REPORT_EMAIL_CC }}
       MAIL_SERVER: ${{ secrets.MAIL_SERVER }}
+      TEAMS_WEBHOOK: ${{ secrets.TEAMS_WEBHOOK }}
 
     steps:
       - uses: actions/checkout@v4
@@ -94,7 +97,17 @@ jobs:
           password: ${{ secrets.MAIL_PASSWORD }}
           from: LAMISPlus QA <${{ secrets.MAIL_USERNAME }}>
           to: ${{ env.MAIL_TO }}
+          cc: ${{ env.MAIL_CC }}
           subject: ${{ steps.email.outputs.subject }}
           html_body: file://cypress/reports/api/final/email.html
           attachments: cypress/reports/api/final/api-report.pdf
           ignore_cert: false
+
+      # Teams, as an alternative or an addition to email - see cypress-ui.yml.
+      - name: Notify Teams
+        if: always() && env.TEAMS_WEBHOOK != ''
+        run: |
+          node scripts/report-teams.js cypress/reports/api API
+          curl -sS -X POST -H 'Content-Type: application/json' \
+            --data @cypress/reports/api/final/teams-card.json \
+            "$TEAMS_WEBHOOK" -o /dev/null -w 'Teams responded %{http_code}\n'
