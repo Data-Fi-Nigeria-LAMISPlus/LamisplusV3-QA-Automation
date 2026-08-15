@@ -137,10 +137,28 @@ export const selectFirstRealOption = (selector) => {
   })
 }
 
+// Pick the option whose text matches, else fall back to the first real one.
+export const selectMatchingOption = (selector, matcher) => {
+  cy.get(selector, { timeout: 15000 }).then(($sel) => {
+    const options = [...$sel[0].options].filter((o) => o.value)
+    const picked = options.find((o) => matcher.test(o.text)) || options[0]
+    if (picked) cy.wrap($sel).select(picked.value, { force: true })
+  })
+}
+
 // Returns the hospital number it registered, so callers that need to find the
 // patient again downstream (OPD flow: post -> triage -> consultation) can track
 // it without re-deriving the suffix.
-export const patientRegistration = ({ hospitalNumber: hospitalNumberOverride } = {}) => {
+// `sex` lets a caller demand a particular client - the family planning flow needs
+// a female patient, everything else takes whatever comes first. `age`/`ageUnit`
+// exist for the same reason: routine immunization is a child's schedule, so that
+// flow registers a toddler rather than the default adult.
+export const patientRegistration = ({
+  hospitalNumber: hospitalNumberOverride,
+  sex,
+  age = '35',
+  ageUnit = 'Years',
+} = {}) => {
     // '/ehr/registration/register' 404s on the deployed app; the live route is
     // '/patients/register'.
     visitPluginRoute('/patients/register', locator.FIRST_NAME_INPUT)
@@ -157,7 +175,11 @@ export const patientRegistration = ({ hospitalNumber: hospitalNumberOverride } =
     cy.get(locator.FIRST_NAME_INPUT).clear({ force: true }).type('John', { force: true })
     cy.get(locator.MIDDLE_NAME_INPUT).clear({ force: true }).type('David', { force: true })
     cy.get(locator.LAST_NAME_INPUT).clear({ force: true }).type('Doe', { force: true })
-    selectFirstRealOption(locator.SEX_SELECT)
+    if (sex) {
+      selectMatchingOption(locator.SEX_SELECT, sex)
+    } else {
+      selectFirstRealOption(locator.SEX_SELECT)
+    }
 
     // Date of Birth: switch the type to "Estimated" and supply an age instead of
     // driving the second calendar. The calendar disables future months, so it can
@@ -165,8 +187,8 @@ export const patientRegistration = ({ hospitalNumber: hospitalNumberOverride } =
     // violation. The control is a custom radio - the click target is the div
     // carrying data-cy, not the adjacent label text.
     cy.get(locator.DOB_ESTIMATED_RADIO).click({ force: true })
-    cy.get(locator.AGE_INPUT, { timeout: 15000 }).clear({ force: true }).type('35', { force: true })
-    cy.get(locator.AGE_UNIT_SELECT).select('Years', { force: true })
+    cy.get(locator.AGE_INPUT, { timeout: 15000 }).clear({ force: true }).type(String(age), { force: true })
+    cy.get(locator.AGE_UNIT_SELECT).select(ageUnit, { force: true })
 
     // ─── 2. REGISTRATION DETAILS ────────────────────────────────────────────
     cy.contains('button', 'Registration Details').click({ force: true })

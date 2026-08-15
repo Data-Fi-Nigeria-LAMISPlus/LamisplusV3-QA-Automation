@@ -22,7 +22,7 @@
 //                     (input-temperature-(Â°c), select-service-point-*), so
 //                     fields are resolved via their <label for> or placeholder.
 
-import { patientRegistration, pickDateFromCalendar } from './patient-flow'
+import { patientRegistration, pickDateFromCalendar, visitPluginRoute } from './patient-flow'
 
 const shortPause = 900
 const stagePause = 1600
@@ -138,7 +138,10 @@ export const clickActionMenuItem = (itemLabel) => {
 }
 
 export const openPatientDashboard = (hospitalNumber) => {
-  cy.visit(routes.patients)
+  // Retrying navigation, not a bare visit: /patients is EHR-plugin provided, and
+  // on a cold load a slow remote leaves the host's catch-all 404 sitting there
+  // permanently - the search box and table never appear at all.
+  visitPluginRoute(routes.patients, 'table')
   openRowActionMenu(hospitalNumber)
   clickActionMenuItem('Dashboard')
 
