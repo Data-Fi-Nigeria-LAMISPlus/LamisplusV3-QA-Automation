@@ -1,0 +1,113 @@
+name: API Performance
+
+# Load and performance test for the LAMISPlus API - scripts/api-load-test.mjs.
+#
+# Not run on every push: it puts sustained traffic on a shared environment, so it
+# runs to a schedule and on demand. The job fails when a threshold is breached,
+# which is what makes it a gate rather than a report nobody reads.
+#
+# Read-only endpoints only. Nothing here writes, so a run leaves no data behind.
+on:
+  workflow_dispatch:
+    inputs:
+      target_env:
+        description: "Target environment: dev, qa, or prod"
+        required: true
+        default: qa
+        type: choice
+        options:
+          - dev
+          - qa
+          - prod
+      vus:
+        description: "Virtual users"
+        required: false
+        default: "10"
+      duration:
+        description: "Seconds of sustained load (after the ramp)"
+        required: false
+        default: "60"
+      p95:
+        description: "Fail if p95 latency exceeds this many milliseconds"
+        required: false
+        default: "1500"
+  schedule:
+    # Weekly, Sunday 04:00 UTC - after the nightly functional runs, before the week.
+    - cron: '0 4 * * 0'
+
+env:
+  CI: true
+  DEV_BASE_URL: ${{ secrets.DEV_BASE_URL }}
+  QA_BASE_URL: ${{ secrets.QA_BASE_URL }}
+  PROD_BASE_URL: ${{ secrets.PROD_BASE_URL }}
+
+jobs:
+  load-test:
+    runs-on: ubuntu-latest
+
+    env:
+      EMAIL: ${{ secrets.EMAIL }}
+      PASSWORD: ${{ secrets.PASSWORD }}
+      TARGET_ENV: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.target_env || 'qa' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20.19.0
+          cache: npm
+
+      - run: npm ci
+
+      # The script reads QA_BASE_URL / DEV_BASE_URL / PROD_BASE_URL, so point the
+      # one it uses at whichever environment was chosen.
+      - name: Run load and performance test
+        id: load
+        run: |
+          case "${TARGET_ENV}" in
+            dev)  export QA_BASE_URL="${DEV_BASE_URL}" ;;
+            prod) export QA_BASE_URL="${PROD_BASE_URL}" ;;
+          esac
+          npm run perf:api -- \
+            --vus "${{ github.event.inputs.vus || '10' }}" \
+            --duration "${{ github.event.inputs.duration || '60' }}" \
+            --p95 "${{ github.event.inputs.p95 || '1500' }}"
+
+      - name: Summarise
+        if: always()
+        run: |
+          report=cypress/reports/perf/api-load.json
+          [ -f "$report" ] || { echo "No performance report produced."; exit 0; }
+          node -e '
+            const r = require("./cypress/reports/perf/api-load.json");
+            const o = r.overall || {};
+            const line = (s) => console.log(s);
+            line("## API performance");
+            line("");
+            line(`Target **${r.target}** · ${r.config.vus} virtual users · ${r.config.duration}s sustained`);
+            line("");
+            line("| Metric | Value |");
+            line("| --- | --- |");
+            line(`| Requests | ${o.count ?? 0} in ${o.wallSeconds ?? 0}s (${o.throughputPerSecond ?? 0}/s) |`);
+            line(`| Median | ${Math.round(o.p50 ?? 0)} ms |`);
+            line(`| 95th percentile | ${Math.round(o.p95 ?? 0)} ms |`);
+            line(`| 99th percentile | ${Math.round(o.p99 ?? 0)} ms |`);
+            line(`| Slowest | ${Math.round(o.max ?? 0)} ms |`);
+            line(`| Error rate | ${r.errorRate ?? 0}% |`);
+            line("");
+            if ((r.breaches || []).length) {
+              line("**Thresholds breached**");
+              r.breaches.forEach((b) => line(`- ${b}`));
+            } else {
+              line("All thresholds met.");
+            }
+          ' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload performance report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-performance-report
+          path: cypress/reports/perf/api-load.json
+          if-no-files-found: warn

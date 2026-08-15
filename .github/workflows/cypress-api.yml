@@ -56,9 +56,19 @@ jobs:
         if: always()
         run: node scripts/ci-test-summary.js cypress/reports/api "API" "${{ steps.run_api_tests.outcome }}"
 
+      # The folder holds merged.json, the interactive HTML and the PDF.
       - name: Upload API Report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: api-report
           path: cypress/reports/api/final
+
+      # The PDF on its own, for one-click download from the run summary.
+      - name: Upload API Report PDF
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-report-pdf
+          path: cypress/reports/api/final/api-report.pdf
+          if-no-files-found: warn
