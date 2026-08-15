@@ -55,13 +55,21 @@ describe('API - known defects', () => {
     })
   })
 
-  // Records a server-side failure, not a bad request: the endpoint is reachable
-  // and the caller sends nothing, yet it errors. The scheduled-admissions list is
-  // what the inpatient admissions worklist is built from, which is why that UI
-  // spec finds an empty queue.
-  it('should fail to list scheduled admissions (app defect)', () => {
-    apiGet('/plugin/ehr/api/v1/scheduled-admissions').then((response) => {
-      expectApiError(response, { status: 500, code: 'INTERNAL_ERROR' })
+  // Endpoints that are reachable, take no input, and still error. Nothing is sent
+  // to them, so there is no request to blame - the handler itself is failing.
+  //
+  // These were found by the endpoint sweep, which calls every parameterless GET.
+  // The scheduled-admissions one explains a UI failure: it is what the inpatient
+  // admissions worklist is built from, which is why that queue is always empty.
+  ;[
+    ['scheduled admissions', '/plugin/ehr/api/v1/scheduled-admissions', 'the inpatient admissions worklist reads this'],
+    ['the audit log', '/api/audit/events', 'the audit trail cannot be listed'],
+    ['the plugin manifest', '/core/api/v1/plugin/manifest', 'other plugin endpoints work, only the manifest fails'],
+  ].forEach(([name, url, consequence]) => {
+    it(`should fail to load ${name} - ${consequence} (app defect)`, () => {
+      apiGet(url).then((response) => {
+        expectApiError(response, { status: 500, code: 'INTERNAL_ERROR' })
+      })
     })
   })
 

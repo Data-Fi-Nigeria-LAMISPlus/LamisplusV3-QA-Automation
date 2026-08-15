@@ -168,6 +168,30 @@ function explain(message) {
 
 const SEVERITY_ORDER = { product: 0, data: 1, glitch: 2 };
 
+// How much of the API this suite actually reaches, stated plainly and taken from
+// the generated inventory rather than from memory.
+//
+// Worth printing because the headline is easy to misread: a green API report
+// says the endpoints that were called are healthy, not that the API is. Most of
+// the surface needs a record id or writes data, and is not called at all.
+function apiCoverage() {
+  const inventoryPath = path.resolve("cypress/fixtures/api-endpoints.json");
+  if (!fs.existsSync(inventoryPath)) return null;
+
+  try {
+    const inventory = JSON.parse(fs.readFileSync(inventoryPath, "utf8"));
+    const total = inventory.totals?.all ?? 0;
+    const byVerb = inventory.totals?.byVerb ?? {};
+    const swept = inventory.totals?.sweepable ?? 0;
+    const getsNeedingId = (byVerb.GET ?? 0) - swept;
+    const writes = total - (byVerb.GET ?? 0);
+
+    return { total, swept, getsNeedingId, writes, generatedAt: inventory.generatedAt };
+  } catch {
+    return null;
+  }
+}
+
 // What the run this report came from actually does, in plain words.
 //
 // Readers get the report without the workflow file, so "UI Tests ran" means
@@ -403,6 +427,18 @@ function buildHtml({ label, stats, specs, failures, env, generatedAt }) {
     system behaved correctly. A check that does not pass is listed below, in plain terms, with what
     it means and who should look at it.</p>
     ${ABOUT[label]?.caveat ? `<p><strong>Worth knowing.</strong> ${escapeHtml(ABOUT[label].caveat)}</p>` : ""}
+    ${
+      label === "API" && apiCoverage()
+        ? (() => {
+            const c = apiCoverage();
+            return `<p><strong>How much is covered.</strong> The API has ${c.total} endpoints in total. This suite calls
+              <strong>${c.swept}</strong> of them on every run - the ones that can be requested without setting anything up
+              first. The remaining ${c.getsNeedingId + c.writes} are not called: ${c.getsNeedingId} need the id of an
+              existing record, and ${c.writes} create, change or delete data, which needs a payload and a way to clean up
+              afterwards. So a green report here means the endpoints that were called are healthy - not that the whole API is.</p>`;
+          })()
+        : ""
+    }
     ${
       ABOUT[label]
         ? `<p class="about-meta"><strong>When it runs.</strong> ${escapeHtml(ABOUT[label].runs)}

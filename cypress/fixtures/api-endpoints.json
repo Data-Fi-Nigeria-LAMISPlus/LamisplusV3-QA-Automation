@@ -1,0 +1,520 @@
+{
+  "generatedFrom": "../Lamisplus3.0/api",
+  "generatedAt": "2026-08-15",
+  "totals": {
+    "all": 457,
+    "byVerb": {
+      "GET": 244,
+      "POST": 106,
+      "PUT": 62,
+      "DELETE": 36,
+      "PATCH": 9
+    },
+    "sweepable": 83
+  },
+  "skippedModules": [
+    "billing-plugin",
+    "sync-plugin"
+  ],
+  "note": "Sweepable = GET endpoints with no path variable and no side effect, so they can be called without setup. Regenerate with: node scripts/extract-api-endpoints.mjs --source ../Lamisplus3.0/api",
+  "sweepable": [
+    {
+      "verb": "GET",
+      "path": "/api/admin/cache/health",
+      "controller": "CacheMonitoringController",
+      "module": "lamisplus-core"
+    },
+    {
+      "verb": "GET",
+      "path": "/api/admin/cache/stats",
+      "controller": "CacheMonitoringController",
+      "module": "lamisplus-core"
+    },
+    {
+      "verb": "GET",
+      "path": "/api/admin/cache/stats/text",
+      "controller": "CacheMonitoringController",
+      "module": "lamisplus-core"
+    },
+    {
+      "verb": "GET",
+      "path": "/api/admin/plugins/monitoring/health",
+      "controller": "PluginMonitoringController",
+      "module": "lamisplus-core"
+    },
+    {
+      "verb": "GET",
+      "path": "/api/admin/plugins/monitoring/summary",
+      "controller": "PluginMonitoringController",
+      "module": "lamisplus-core"
+    },
+    {
+      "verb": "GET",
+      "path": "/api/audit/available-dates",
+      "controller": "AuditController",
+      "module": "lamisplus-core"
+    },
+    {
+      "verb": "GET",
+      "path": "/api/audit/events",
+      "controller": "AuditController",
+      "module": "lamisplus-core"
+    },
+    {
+      "verb": "GET",
+      "path": "/api/audit/events/range",
+      "controller": "AuditController",
+      "module": "lamisplus-core"
+    },
+    {
+      "verb": "GET",
+      "path": "/api/audit/queue-stats",
+      "controller": "AuditController",
+      "module": "lamisplus-core"
+    },
+    {
+      "verb": "GET",
+      "path": "/api/debug/plugin-registry",
+      "controller": "AuthenticationController",
+      "module": "lamisplus-core"
+    },
+    {
+      "verb": "GET",
+      "path": "/api/devices/my-devices",
+      "controller": "DeviceController",
+      "module": "lamisplus-core"
+    },
+    {
+      "verb": "GET",
+      "path": "/api/menus/api/v1/core/plugin/get_all",
+      "controller": "MenuController",
+      "module": "lamisplus-core"
+    },
+    {
+      "verb": "GET",
+      "path": "/api/permissions/api/v1/core/permissions",
+      "controller": "PermissionController",
+      "module": "lamisplus-core"
+    },
+    {
+      "verb": "GET",
+      "path": "/api/v1/core/analytics/metrics/compare",
+      "controller": "AnalyticsMetricsController",
+      "module": "lamisplus-core"
+    },
+    {
+      "verb": "GET",
+      "path": "/api/v1/core/analytics/metrics/daily",
+      "controller": "AnalyticsMetricsController",
+      "module": "lamisplus-core"
+    },
+    {
+      "verb": "GET",
+      "path": "/api/v1/core/analytics/metrics/drill-down/lga",
+      "controller": "AnalyticsMetricsController",
+      "module": "lamisplus-core"
+    },
+    {
+      "verb": "GET",
+      "path": "/api/v1/core/analytics/metrics/drill-down/tenant",
+      "controller": "AnalyticsMetricsController",
+      "module": "lamisplus-core"
+    },
+    {
+      "verb": "GET",
+      "path": "/api/v1/core/analytics/metrics/range",
+      "controller": "AnalyticsMetricsController",
+      "module": "lamisplus-core"
+    },
+    {
+      "verb": "GET",
+      "path": "/api/v1/core/health",
+      "controller": "HealthMonitoringController",
+      "module": "lamisplus-core"
+    },
+    {
+      "verb": "GET",
+      "path": "/api/v1/core/health/plugins",
+      "controller": "HealthMonitoringController",
+      "module": "lamisplus-core"
+    },
+    {
+      "verb": "GET",
+      "path": "/api/v1/core/health/uptime",
+      "controller": "HealthMonitoringController",
+      "module": "lamisplus-core"
+    },
+    {
+      "verb": "GET",
+      "path": "/api/v1/core/plugins/usage/facility",
+      "controller": "PluginUsageController",
+      "module": "lamisplus-core"
+    },
+    {
+      "verb": "GET",
+      "path": "/api/v1/core/plugins/usage/region",
+      "controller": "PluginUsageController",
+      "module": "lamisplus-core"
+    },
+    {
+      "verb": "GET",
+      "path": "/api/v1/core/plugins/usage/tenant",
+      "controller": "PluginUsageController",
+      "module": "lamisplus-core"
+    },
+    {
+      "verb": "GET",
+      "path": "/api/v1/facilities",
+      "controller": "FacilityManagementController",
+      "module": "lamisplus-core"
+    },
+    {
+      "verb": "GET",
+      "path": "/api/v1/facilities/count",
+      "controller": "FacilityManagementController",
+      "module": "lamisplus-core"
+    },
+    {
+      "verb": "GET",
+      "path": "/api/v1/facilities/current",
+      "controller": "FacilityManagementController",
+      "module": "lamisplus-core"
+    },
+    {
+      "verb": "GET",
+      "path": "/api/v1/facilities/primary",
+      "controller": "FacilityManagementController",
+      "module": "lamisplus-core"
+    },
+    {
+      "verb": "GET",
+      "path": "/api/v1/local/plugin-sync/status",
+      "controller": "LocalPluginSyncController",
+      "module": "lamisplus-core"
+    },
+    {
+      "verb": "GET",
+      "path": "/api/v1/plugin-sync/check",
+      "controller": "PluginSyncController",
+      "module": "lamisplus-core"
+    },
+    {
+      "verb": "GET",
+      "path": "/core/api/v1/auth/forgot-password/methods",
+      "controller": "AuthenticationController",
+      "module": "lamisplus-core"
+    },
+    {
+      "verb": "GET",
+      "path": "/core/api/v1/auth/forgot-password/question",
+      "controller": "AuthenticationController",
+      "module": "lamisplus-core"
+    },
+    {
+      "verb": "GET",
+      "path": "/core/api/v1/auth/mfa/status",
+      "controller": "MfaController",
+      "module": "lamisplus-core"
+    },
+    {
+      "verb": "GET",
+      "path": "/core/api/v1/codeset-groups/groups",
+      "controller": "CodesetGroupController",
+      "module": "lamisplus-core"
+    },
+    {
+      "verb": "GET",
+      "path": "/core/api/v1/codeset-groups/groups/list",
+      "controller": "CodesetGroupController",
+      "module": "lamisplus-core"
+    },
+    {
+      "verb": "GET",
+      "path": "/core/api/v1/organisation-units",
+      "controller": "OrganisationUnitController",
+      "module": "lamisplus-core"
+    },
+    {
+      "verb": "GET",
+      "path": "/core/api/v1/organisation-units/facilities/search",
+      "controller": "OrganisationUnitController",
+      "module": "lamisplus-core"
+    },
+    {
+      "verb": "GET",
+      "path": "/core/api/v1/organisation-units/tenant-facilities",
+      "controller": "OrganisationUnitController",
+      "module": "lamisplus-core"
+    },
+    {
+      "verb": "GET",
+      "path": "/core/api/v1/plugin/admin/all",
+      "controller": "PluginController",
+      "module": "lamisplus-core"
+    },
+    {
+      "verb": "GET",
+      "path": "/core/api/v1/plugin/all",
+      "controller": "PluginController",
+      "module": "lamisplus-core"
+    },
+    {
+      "verb": "GET",
+      "path": "/core/api/v1/plugin/manifest",
+      "controller": "PluginController",
+      "module": "lamisplus-core"
+    },
+    {
+      "verb": "GET",
+      "path": "/core/api/v1/plugin/marketplace/available",
+      "controller": "PluginController",
+      "module": "lamisplus-core"
+    },
+    {
+      "verb": "GET",
+      "path": "/core/api/v1/plugin/my-plugins",
+      "controller": "PluginController",
+      "module": "lamisplus-core"
+    },
+    {
+      "verb": "GET",
+      "path": "/core/api/v1/roles",
+      "controller": "RoleController",
+      "module": "lamisplus-core"
+    },
+    {
+      "verb": "GET",
+      "path": "/core/api/v1/roles/details",
+      "controller": "RoleController",
+      "module": "lamisplus-core"
+    },
+    {
+      "verb": "GET",
+      "path": "/core/api/v1/roles/permissions",
+      "controller": "RoleController",
+      "module": "lamisplus-core"
+    },
+    {
+      "verb": "GET",
+      "path": "/core/api/v1/roles/tenant/roles",
+      "controller": "RoleController",
+      "module": "lamisplus-core"
+    },
+    {
+      "verb": "GET",
+      "path": "/core/api/v1/super-admin/all-users",
+      "controller": "SuperAdminController",
+      "module": "lamisplus-core"
+    },
+    {
+      "verb": "GET",
+      "path": "/core/api/v1/super-admin/dashboard/stats",
+      "controller": "SuperAdminController",
+      "module": "lamisplus-core"
+    },
+    {
+      "verb": "GET",
+      "path": "/core/api/v1/super-admin/plugins/usage",
+      "controller": "SuperAdminController",
+      "module": "lamisplus-core"
+    },
+    {
+      "verb": "GET",
+      "path": "/core/api/v1/super-admin/tenants",
+      "controller": "SuperAdminController",
+      "module": "lamisplus-core"
+    },
+    {
+      "verb": "GET",
+      "path": "/core/api/v1/super-admin/users",
+      "controller": "SuperAdminController",
+      "module": "lamisplus-core"
+    },
+    {
+      "verb": "GET",
+      "path": "/core/api/v1/users",
+      "controller": "UserController",
+      "module": "lamisplus-core"
+    },
+    {
+      "verb": "GET",
+      "path": "/core/api/v1/users/get-tenant-users",
+      "controller": "UserController",
+      "module": "lamisplus-core"
+    },
+    {
+      "verb": "GET",
+      "path": "/core/api/v1/users/me",
+      "controller": "UserController",
+      "module": "lamisplus-core"
+    },
+    {
+      "verb": "GET",
+      "path": "/core/api/v1/users/system-dashboard",
+      "controller": "UserController",
+      "module": "lamisplus-core"
+    },
+    {
+      "verb": "GET",
+      "path": "/core/api/v1/users/tenants",
+      "controller": "UserController",
+      "module": "lamisplus-core"
+    },
+    {
+      "verb": "GET",
+      "path": "/levels/without-subset",
+      "controller": "OrganisationUnitController",
+      "module": "lamisplus-core"
+    },
+    {
+      "verb": "GET",
+      "path": "/plugin-manifest.json",
+      "controller": "ManifestController",
+      "module": "lamisplus-core"
+    },
+    {
+      "verb": "GET",
+      "path": "/plugin/appointments/appointments",
+      "controller": "AppointmentController",
+      "module": "appointment-plugin"
+    },
+    {
+      "verb": "GET",
+      "path": "/plugin/appointments/ping",
+      "controller": "AppointmentController",
+      "module": "appointment-plugin"
+    },
+    {
+      "verb": "GET",
+      "path": "/plugin/ehr/api/dashboard/patient-by-age-group",
+      "controller": "DashboardController",
+      "module": "lamisplus-ehr"
+    },
+    {
+      "verb": "GET",
+      "path": "/plugin/ehr/api/dashboard/patient-summary",
+      "controller": "DashboardController",
+      "module": "lamisplus-ehr"
+    },
+    {
+      "verb": "GET",
+      "path": "/plugin/ehr/api/lab-order-result/api/lab-results",
+      "controller": "LabOrderResultController",
+      "module": "lamisplus-ehr"
+    },
+    {
+      "verb": "GET",
+      "path": "/plugin/ehr/api/lab-order-result/hepatitis-eligibles",
+      "controller": "LabOrderResultController",
+      "module": "lamisplus-ehr"
+    },
+    {
+      "verb": "GET",
+      "path": "/plugin/ehr/api/lab-order-result/lab-eligibles",
+      "controller": "LabOrderResultController",
+      "module": "lamisplus-ehr"
+    },
+    {
+      "verb": "GET",
+      "path": "/plugin/ehr/api/lab-order-samples/laboratory-stats",
+      "controller": "LabOrderSampleController",
+      "module": "lamisplus-ehr"
+    },
+    {
+      "verb": "GET",
+      "path": "/plugin/ehr/api/lab-order-samples/sample",
+      "controller": "LabOrderSampleController",
+      "module": "lamisplus-ehr"
+    },
+    {
+      "verb": "GET",
+      "path": "/plugin/ehrapi/v1/consultation/general-dashboard",
+      "controller": "ConsultationSummaryController",
+      "module": "lamisplus-ehr"
+    },
+    {
+      "verb": "GET",
+      "path": "/plugin/ehrapi/v1/drug-dispensing/drug-order-and-dispensing-monthly-summary",
+      "controller": "DrugDispensingController",
+      "module": "lamisplus-ehr"
+    },
+    {
+      "verb": "GET",
+      "path": "/plugin/ehrapi/v1/drug-orders/prescription-order-information",
+      "controller": "DrugOrderController",
+      "module": "lamisplus-ehr"
+    },
+    {
+      "verb": "GET",
+      "path": "/plugin/ehrapi/v1/triage/patients-attended-to",
+      "controller": "TriageController",
+      "module": "lamisplus-ehr"
+    },
+    {
+      "verb": "GET",
+      "path": "/plugin/ehrapi/v1/triage/patients-in-waiting",
+      "controller": "TriageController",
+      "module": "lamisplus-ehr"
+    },
+    {
+      "verb": "GET",
+      "path": "/plugin/ehrapi/v1/triage/triage-view",
+      "controller": "TriageController",
+      "module": "lamisplus-ehr"
+    },
+    {
+      "verb": "GET",
+      "path": "/plugin/ehrapi/v1/visit/active",
+      "controller": "VisitController",
+      "module": "lamisplus-ehr"
+    },
+    {
+      "verb": "GET",
+      "path": "/plugin/inpatientapi/v1/discharges/discharged",
+      "controller": "inpatientAdmissionDischargeController",
+      "module": "lamisplus-inpatient"
+    },
+    {
+      "verb": "GET",
+      "path": "/plugin/pbh/api/v1/hts/encounters/register",
+      "controller": "HtsController",
+      "module": "lamisplus-pbh"
+    },
+    {
+      "verb": "GET",
+      "path": "/plugin/pbh/api/v1/hts/encounters/waiting",
+      "controller": "HtsController",
+      "module": "lamisplus-pbh"
+    },
+    {
+      "verb": "GET",
+      "path": "/plugin/reports/ping",
+      "controller": "ReportController",
+      "module": "report-plugin"
+    },
+    {
+      "verb": "GET",
+      "path": "/plugin/reports/reports",
+      "controller": "ReportController",
+      "module": "report-plugin"
+    },
+    {
+      "verb": "GET",
+      "path": "/plugins/health",
+      "controller": "PluginResourceController",
+      "module": "lamisplus-core"
+    },
+    {
+      "verb": "GET",
+      "path": "/redoc.html",
+      "controller": "ApiDocController",
+      "module": "lamisplus-core"
+    },
+    {
+      "verb": "GET",
+      "path": "/tenants/assigned-facilities",
+      "controller": "OrganisationUnitController",
+      "module": "lamisplus-core"
+    }
+  ]
+}
